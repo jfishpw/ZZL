@@ -1,0 +1,17 @@
+# 编译产物
+build/
+.gradle/
+local.properties
+*.iml
+.idea/
+
+# 签名文件与密钥 —— 绝对不要提交
+*.jks
+*.keystore
+keystore.properties
+
+# 日志与临时文件
+*.log
+captures/
+.externalNativeBuild/
+.cxx/

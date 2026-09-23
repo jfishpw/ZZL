@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ZhangZhongLing" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFF7F6FC</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!--
+      离线密码键盘的专用主题。
+      深色背景 + 无标题栏：这个界面可能被孩子看到，越不像"某个 App 的页面"
+      越不会被追问。同时它需要自己的窗口背景色，否则从拦截遮罩跳过来时会闪白。
+    -->
+    <style name="Theme.ZzlGuardian.PinEntry" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#FF141318</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#FF141318</item>
+        <item name="android:navigationBarColor">#FF141318</item>
+        <item name="android:windowSoftInputMode">stateAlwaysVisible</item>
+    </style>
+</resources>

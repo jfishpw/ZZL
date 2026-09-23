@@ -1,0 +1,48 @@
+services:
+  zzl-server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    image: zhangzhongling/server:latest
+    container_name: zzl-server
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    # 容器内端口固定 8080；.env 中的 APP_PORT 决定宿主机对外端口
+    # 这样改端口只需改一处，且不会与容器内监听端口打架
+    environment:
+      APP_PORT: 8080
+
+    ports:
+      # 宿主机对外默认 8111（8080 常被占用）；容器内仍是 8080
+      - "${APP_PORT:-8111}:8080"
+
+    volumes:
+      - zzl-data:/data
+
+    # 健康检查在 Dockerfile 中定义（HEALTHCHECK 指令），此处不重复声明
+
+volumes:
+  zzl-data:
+
+# 备注：日后接入域名并启用 HTTPS 时，再放开下面的 Caddy 服务，
+# 并删除 zzl-server 的 ports 段（由 Caddy 经内部网络转发）。
+#
+#  caddy:
+#    image: caddy:2-alpine
+#    restart: unless-stopped
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#    volumes:
+#      - ./Caddyfile:/etc/caddy/Caddyfile
+#      - caddy-data:/data
+#      - caddy-config:/config
+#    depends_on:
+#      - zzl-server
+#
+# volumes:
+#   caddy-data:
+#   caddy-config:

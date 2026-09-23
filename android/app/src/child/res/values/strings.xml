@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      无障碍服务的说明文字。这一句会原样展示在系统的无障碍设置页面上，
+      需要让家长看懂"为什么需要开这个权限"，否则很容易被当成危险应用而放弃开启。
+    -->
+    <string name="accessibility_description">开启后可识别孩子当前正在使用的应用，用于按家长设定的时长与时段进行管控；仅在设备本地判断，不上传应用内容。</string>
+
+    <string name="guard_service_label">掌中灵管控服务</string>
+
+    <!--
+      设备管理器的说明文字。系统激活页会展示它。
+      刻意不提"防卸载"，而是说清"防止管控被中途取消" ——
+      前者听起来像在限制家长自己，后者才是家长真正想要的效果。
+    -->
+    <string name="device_admin_description">激活后可防止本应用被误卸载，确保家长设定的使用时长限制不会中途失效。</string>
+</resources>

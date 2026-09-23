@@ -1,0 +1,36 @@
+# 依赖与产物
+node_modules/
+build/
+.gradle/
+
+# 运行时数据（SQLite 与截屏）—— 绝不提交
+server/data/
+*.db
+*.db-wal
+*.db-shm
+
+# 密钥与本地配置
+.env
+deploy/.env
+local.properties
+*.jks
+*.keystore
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+
+# 构建产物与交付副本（可由脚本重新生成，不入库）
+dist/
+zzl-deploy.tar.gz
+
+# 旧构建缓存备份（数千个中间产物，仅本机保留）
+android/app/_old_build/
+
+# 工作区数据与缓存
+.workbuddy/
+.cache/

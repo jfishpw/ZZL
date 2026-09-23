@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>掌中灵 — 安装与使用手册</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --ink-2:#4a4a4a; --ink-3:#767676;
+    --line:#dcdcdc; --line-soft:#ececec;
+    --bg:#ffffff; --bg-soft:#f7f7f5; --bg-warn:#fff8e6; --bg-danger:#fdecec; --bg-ok:#eef7ee;
+    --accent:#1f6feb; --warn:#9a6700; --danger:#b42318; --ok:#1a7f37;
+    --mono:ui-monospace,"SFMono-Regular","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; padding:40px 24px 96px;
+    background:var(--bg); color:var(--ink);
+    font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    max-width:860px; margin-inline:auto;
+  }
+  h1{font-size:30px;line-height:1.3;margin:0 0 8px;letter-spacing:-.4px}
+  h2{font-size:22px;margin:56px 0 16px;padding-bottom:10px;border-bottom:2px solid var(--ink);letter-spacing:-.2px}
+  h3{font-size:17px;margin:32px 0 10px}
+  h4{font-size:15px;margin:22px 0 8px;color:var(--ink-2)}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  code{font-family:var(--mono);font-size:.88em;background:var(--bg-soft);border:1px solid var(--line-soft);border-radius:4px;padding:1px 5px}
+  pre{background:var(--bg-soft);border:1px solid var(--line-soft);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.65}
+  pre code{background:none;border:none;padding:0}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(31,111,235,.3)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--bg-soft);font-weight:600}
+  hr{border:none;border-top:1px solid var(--line);margin:40px 0}
+
+  .sub{color:var(--ink-3);font-size:15px;margin:0 0 4px}
+  .lead{font-size:17px;color:var(--ink-2)}
+
+  .box{border-radius:9px;padding:14px 17px;margin:16px 0;border:1px solid;font-size:14.8px}
+  .box p:first-child{margin-top:0} .box p:last-child{margin-bottom:0}
+  .box .t{font-weight:700;display:block;margin-bottom:4px}
+  .info{background:var(--bg-soft);border-color:var(--line)}
+  .warn{background:var(--bg-warn);border-color:#e8cf80;color:#5c4a00}
+  .warn .t{color:var(--warn)}
+  .danger{background:var(--bg-danger);border-color:#f0b4ae;color:#6b1d16}
+  .danger .t{color:var(--danger)}
+  .ok{background:var(--bg-ok);border-color:#b6ddb6;color:#14532d}
+  .ok .t{color:var(--ok)}
+
+  .step{counter-reset:none;list-style:none;padding-left:0;margin:18px 0}
+  .step>li{position:relative;padding-left:42px;margin:20px 0}
+  .step>li::before{
+    counter-increment:step;content:counter(step);
+    position:absolute;left:0;top:1px;width:26px;height:26px;border-radius:50%;
+    background:var(--ink);color:#fff;font-size:13.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step{counter-reset:step}
+  .step>li>.st{font-weight:700;display:block;margin-bottom:3px}
+
+  .toc{background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin:26px 0}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:36px}
+  .toc li{margin:3px 0}
+  @media (max-width:640px){.toc ol{columns:1}}
+
+  figure{margin:22px 0;text-align:center}
+  figure svg{max-width:100%;height:auto}
+  figcaption{font-size:13.5px;color:var(--ink-3);margin-top:9px}
+
+  .kbd{display:inline-block;font-family:var(--mono);font-size:12.5px;background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px}
+  .path{font-family:var(--mono);font-size:13.5px;background:#fff;border:1px dashed var(--line);border-radius:5px;padding:2px 7px;display:inline-block;margin:2px 0}
+  .tag{display:inline-block;font-size:12px;font-weight:600;border-radius:4px;padding:1px 7px;border:1px solid;vertical-align:1px}
+  .tag.req{color:var(--danger);border-color:#f0b4ae;background:var(--bg-danger)}
+  .tag.opt{color:var(--ink-3);border-color:var(--line);background:var(--bg-soft)}
+  .tag.strong{color:var(--ok);border-color:#b6ddb6;background:var(--bg-ok)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:#fff}
+  .card h4{margin-top:0}
+
+  @media print{
+    body{padding:0;max-width:none;font-size:11.5pt}
+    h2{page-break-after:avoid;margin-top:28px}
+    h3,h4{page-break-after:avoid}
+    .box,figure,table,pre{page-break-inside:avoid}
+    .toc{page-break-after:always}
+    a{color:inherit;border:none}
+  }
+</style>
+</head>
+<body>
+
+<h1>掌中灵 · 安装与使用手册</h1>
+<p class="sub">免 root 的安卓儿童平板监管系统 ｜ 适用于 1.0.0</p>
+<p class="lead">按本手册从上到下走一遍即可完成部署。第一次装机大约需要 40 分钟，
+其中服务器 15 分钟、两台设备各 10 分钟。<strong>第 3 章是重点</strong>，多数问题都出在那里。</p>
+
+<div class="toc">
+<strong>目录</strong>
+<ol>
+<li><a href="#s0">先花 3 分钟了解全貌</a></li>
+<li><a href="#s1">部署服务器（一次性）</a></li>
+<li><a href="#s2">家长手机装控制端</a></li>
+<li><a href="#s3">儿童平板装被控端 ★</a></li>
+<li><a href="#s4">配置管控规则</a></li>
+<li><a href="#s5">离线密码</a></li>
+<li><a href="#s6">日常使用</a></li>
+<li><a href="#s7">故障排查</a></li>
+<li><a href="#s8">退出管控与卸载</a></li>
+<li><a href="#s9">附录：能力边界</a></li>
+</ol>
+</div>
+
+
+<h2 id="s0">1. 先花 3 分钟了解全貌</h2>
+
+<p>这套系统由三个部分组成，缺一不可：</p>
+
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="系统架构：控制端、服务器、被控端的关系">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#767676"/>
+    </marker>
+  </defs>
+
+  <!-- 控制端 -->
+  <rect x="24" y="52" width="176" height="196" rx="12" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.6"/>
+  <rect x="76" y="66" width="72" height="118" rx="9" fill="#f7f7f5" stroke="#dcdcdc"/>
+  <line x1="100" y1="176" x2="124" y2="176" stroke="#dcdcdc" stroke-width="2"/>
+  <text x="112" y="204" font-size="14" font-weight="700" fill="#1a1a1a" text-anchor="middle">控制端</text>
+  <text x="112" y="224" font-size="11.5" fill="#767676" text-anchor="middle">家长手机</text>
+  <text x="112" y="240" font-size="11.5" fill="#767676" text-anchor="middle">设规则·看报告·临时放行</text>
+
+  <!-- 服务器 -->
+  <rect x="252" y="30" width="196" height="240" rx="12" fill="#f7f7f5" stroke="#1a1a1a" stroke-width="1.8"/>
+  <text x="350" y="62" font-size="14" font-weight="700" fill="#1a1a1a" text-anchor="middle">中继服务器</text>
+  <text x="350" y="81" font-size="11.5" fill="#767676" text-anchor="middle">阿里云 · 你自己的</text>
+  <rect x="286" y="98" width="128" height="26" rx="5" fill="#fff" stroke="#dcdcdc"/>
+  <text x="350" y="115" font-size="11.5" fill="#4a4a4a" text-anchor="middle">账号与设备绑定</text>
+  <rect x="286" y="130" width="128" height="26" rx="5" fill="#fff" stroke="#dcdcdc"/>
+  <text x="350" y="147" font-size="11.5" fill="#4a4a4a" text-anchor="middle">策略下发</text>
+  <rect x="286" y="162" width="128" height="26" rx="5" fill="#fff" stroke="#dcdcdc"/>
+  <text x="350" y="179" font-size="11.5" fill="#4a4a4a" text-anchor="middle">使用记录汇总</text>
+  <rect x="286" y="194" width="128" height="26" rx="5" fill="#fff" stroke="#dcdcdc"/>
+  <text x="350" y="211" font-size="11.5" fill="#4a4a4a" text-anchor="middle">离线指令排队</text>
+  <text x="350" y="248" font-size="11.5" fill="#9a6700" text-anchor="middle">只存规则与记录，不存屏幕内容</text>
+
+  <!-- 被控端 -->
+  <rect x="500" y="52" width="176" height="196" rx="12" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.6"/>
+  <rect x="532" y="66" width="112" height="118" rx="9" fill="#f7f7f5" stroke="#dcdcdc"/>
+  <text x="588" y="204" font-size="14" font-weight="700" fill="#1a1a1a" text-anchor="middle">被控端</text>
+  <text x="588" y="224" font-size="11.5" fill="#767676" text-anchor="middle">儿童平板</text>
+  <text x="588" y="240" font-size="11.5" fill="#767676" text-anchor="middle">本地判定·断网照常管</text>
+
+  <!-- 连线 -->
+  <line x1="202" y1="112" x2="248" y2="112" stroke="#767676" stroke-width="1.5" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <line x1="452" y1="112" x2="496" y2="112" stroke="#767676" stroke-width="1.5" marker-end="url(#ar)" marker-start="url(#ar)"/>
+
+  <text x="225" y="104" font-size="11" fill="#767676" text-anchor="middle">HTTPS</text>
+  <text x="475" y="104" font-size="11" fill="#767676" text-anchor="middle">HTTPS</text>
+</svg>
+<figcaption>控制端与被控端之间没有直连，全部通过你自己的服务器中转</figcaption>
+</figure>
+
+<div class="grid2">
+  <div class="card">
+    <h4>控制端（家长手机）</h4>
+    <ul>
+      <li>设定每天能用多久、哪些应用能用、几点到几点能用</li>
+      <li>查看使用报告、拦截记录、截屏</li>
+      <li>临时加时、放行某个应用、立即锁机</li>
+      <li>审批孩子发来的「申请加时」</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>被控端（儿童平板）</h4>
+    <ul>
+      <li>按家长设定的规则自动拦截，<strong>规则存在本地，断网也照常管</strong></li>
+      <li>无法自行卸载，无法简单退出</li>
+      <li>到时弹全屏遮盖页，并把孩子挡回桌面</li>
+      <li>孩子可在拦截页上「申请加时」</li>
+    </ul>
+  </div>
+</div>
+
+<div class="box info">
+  <span class="t">服务器不保存屏幕内容</span>
+  截屏只有在家长<strong>主动点一次</strong>的时候才拍一张，拍完即传即存，服务器上保留
+  60 张 / 30 天（可在 <code>.env</code> 里调）。它不会定时截、更不会实时录屏。
+</div>
+
+<div class="box warn">
+  <span class="t">开始之前，请先想清楚两件事</span>
+  <p>1. <strong>这套软件是为「和 7～14 岁孩子达成的约定」设计的，不是用来偷偷监视的。</strong>
+     被控端的常驻通知会一直显示剩余可用时长，孩子看得见。请提前和孩子说清楚规则。</p>
+  <p>2. <strong>请务必先自己走通一遍再交给孩子。</strong> 特别是第 3 章的权限，漏一项就会「看着装了但管不住」。</p>
+</div>
+
+
+<h2 id="s1">2. 部署服务器（一次性，约 15 分钟）</h2>
+
+<p>服务器的作用是让家长手机和孩子平板能互相找到对方。<strong>它必须放在公网上</strong>，
+否则孩子在外面用流量时，家长就下发不了指令。</p>
+
+<p>本项目默认使用阿里云轻量应用服务器。最便宜的 2 核 2G 配置完全够用
+（同时管十几台设备也没压力）。</p>
+
+<h3>2.1 装 Docker</h3>
+
+<p>SSH 登录服务器后执行：</p>
+
+<pre><code>curl -fsSL https://get.docker.com | sh -s -- --mirror Aliyun
+systemctl enable --now docker</code></pre>
+
+<h3>2.2 配置镜像加速 <span class="tag req">必做</span></h3>
+
+<p>不配这一步，拉取 Node 镜像会慢到超时。加速地址在
+<strong>阿里云控制台 → 容器镜像服务 → 镜像加速器</strong> 可以拿到专属地址：</p>
+
+<pre><code>sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json &lt;&lt;'JSON'
+{
+  "registry-mirrors": ["https://你的专属地址.mirror.aliyuncs.com"]
+}
+JSON
+sudo systemctl daemon-reload
+sudo systemctl restart docker</code></pre>
+
+<h3>2.3 放行安全组端口 <span class="tag req">最容易漏</span></h3>
+
+<div class="box danger">
+  <span class="t">不做这一步，服务是好的，但 App 永远连不上</span>
+  阿里云控制台 → 找到你的服务器 → <strong>安全组 / 防火墙</strong> → 入方向 → 添加规则 →
+  协议 <code>TCP</code>，端口 <code>8111</code>，授权对象 <code>0.0.0.0/0</code>。
+</div>
+
+<h3>2.4 上传并一键部署</h3>
+
+<p>在<strong>你本机</strong>的项目目录里（已生成部署包 <code>zzl-deploy.tar.gz</code>）：</p>
+
+<pre><code># 换成你的服务器公网 IP
+scp zzl-deploy.tar.gz root@203.0.113.10:/opt/
+
+ssh root@203.0.113.10 "mkdir -p /opt/zzl &amp;&amp; cd /opt/zzl &amp;&amp; tar -xzf /opt/zzl-deploy.tar.gz"
+
+ssh root@203.0.113.10 "cd /opt/zzl/deploy &amp;&amp; chmod +x install.sh &amp;&amp; ./install.sh"</code></pre>
+
+<p>脚本会自动生成随机密钥、构建镜像、启动容器，并做一次健康检查。
+看到 <code>部署完成</code> 就成功了。</p>
+
+<h3>2.5 验证</h3>
+
+<pre><code># 在服务器上
+curl http://127.0.0.1:8111/api/health
+# 期望输出：{"ok":true,"service":"zhangzhongling","serverTime":...}
+
+# 也可以在你自己电脑的浏览器里试
+#   http://203.0.113.10:8111/api/health   （203.0.113.10 为示例地址，换成你自己的）
+# 能打开说明安全组也放行好了</code></pre>
+
+<div class="box info">
+  <span class="t">换端口</span>
+  改 <code>/opt/zzl/deploy/.env</code> 里的 <code>APP_PORT</code>，然后
+  <code>cd /opt/zzl/deploy &amp;&amp; ./install.sh --update</code>。
+  记得安全组同步放行新端口。
+</div>
+
+<h3>2.6 备份（建议设成定时任务）</h3>
+
+<pre><code>docker compose exec zzl-server sh -c 'tar -czf - /data' &gt; zzl-backup-$(date +%F).tar.gz</code></pre>
+
+<p>备份文件里包含数据库与截屏图片。<strong>换服务器时把它恢复回 <code>/data</code> 卷即可</strong>，
+不用重新配对设备。</p>
+
+
+<h2 id="s2">3. 家长手机装控制端</h2>
+
+<h3>3.1 安装</h3>
+
+<p>把 <code>app-parent-release.apk</code> 传到手机（微信文件传输助手、数据线、网盘都行），
+点击安装。若提示「不允许安装未知应用」，按系统引导允许即可。</p>
+
+<div class="box warn">
+  <span class="t">Play Protect 会提示「应用存在风险」</span>
+  管控类应用会申请读取应用列表等敏感权限，被 Google 标记属于正常现象。
+  选「仍然安装」即可。
+</div>
+
+<h3>3.2 填写服务器地址</h3>
+
+<ol>
+  <li>打开「掌中灵·控制端」，在登录页点 <strong>服务器设置</strong></li>
+  <li>主机填 <code>203.0.113.10</code>（示例地址，换成你自己的公网 IP 或域名），端口填 <code>8111</code>
+      （新装的 App 已默认 8111，一般不用改；如手动改过请以 <code>.env</code> 里的 <code>APP_PORT</code> 为准）</li>
+  <li>点「测试并保存」——它会真的去请求一次 <code>/api/health</code>，
+      连不上会明确告诉你原因（地址解析失败 / 连接超时 / 拒绝连接）</li>
+</ol>
+
+<h3>3.3 注册账号并生成配对码</h3>
+
+<ol>
+  <li>注册一个账号（邮箱 + 密码），登录</li>
+  <li>点「添加设备」→ 生成一个 6 位配对码</li>
+</ol>
+
+<div class="box warn">
+  <span class="t">配对码 5 分钟内有效</span>
+  生成后请立刻在平板上输入。过期了重新生成一个就行，没有次数限制。
+</div>
+
+
+<h2 id="s3">4. 儿童平板装被控端 ★</h2>
+
+<p class="lead">这一章是整本手册最重要的部分。<strong>被控端必须拿到 3 项权限、完成 1 次配对</strong>
+才能真正管住设备；漏掉任何一项，都会出现「装了但不起作用」。</p>
+
+<h3>4.1 安装 APK</h3>
+
+<p>把 <code>app-child-release.apk</code> 传到平板并安装。
+安装位置建议选<strong>本机存储</strong>而不是 SD 卡。</p>
+
+<h3>4.2 允许「受限设置」<span class="tag req">Android 13+ 必做</span></h3>
+
+<div class="box danger">
+  <span class="t">这是装机时最容易卡住的一步</span>
+  <p>从浏览器、微信等渠道侧载安装的应用，Android 13 及以上默认
+  <strong>禁止开启无障碍服务</strong>——开关会一直是灰的，点不动。</p>
+  <p>必须先手动解除这个限制：</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 700 262" role="img" aria-label="Android 13+ 允许受限设置的入口位置">
+  <!-- 左侧：设置列表 -->
+  <rect x="16" y="8" width="200" height="246" rx="14" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+  <rect x="16" y="8" width="200" height="34" rx="14" fill="#f7f7f5"/>
+  <text x="30" y="30" font-size="12.5" font-weight="700" fill="#1a1a1a">应用</text>
+  <text x="30" y="30" font-size="12.5" fill="#767676" text-anchor="end" dx="172">掌中灵 &gt;</text>
+
+  <line x1="16" y1="42" x2="216" y2="42" stroke="#ececec"/>
+
+  <text x="32" y="70" font-size="12" fill="#4a4a4a">应用管理</text>
+  <text x="32" y="98" font-size="12" fill="#4a4a4a">默认应用</text>
+  <text x="32" y="126" font-size="12" fill="#4a4a4a">通知</text>
+  <text x="32" y="154" font-size="12" fill="#4a4a4a">权限管理</text>
+  <text x="32" y="182" font-size="12" fill="#4a4a4a">特殊应用权限</text>
+
+  <text x="112" y="230" font-size="11" fill="#767676" text-anchor="middle">① 找到「掌中灵」</text>
+
+  <!-- 中间：应用详情页 -->
+  <rect x="248" y="8" width="200" height="246" rx="14" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+  <rect x="248" y="8" width="200" height="46" rx="14" fill="#f7f7f5"/>
+  <text x="262" y="28" font-size="12.5" font-weight="700" fill="#1a1a1a">掌中灵</text>
+  <text x="262" y="45" font-size="10.5" fill="#767676">应用信息</text>
+
+  <!-- 右上角三点 -->
+  <circle cx="420" cy="27" r="2" fill="#1a1a1a"/>
+  <circle cx="420" cy="33" r="2" fill="#1a1a1a"/>
+  <circle cx="420" cy="39" r="2" fill="#1a1a1a"/>
+  <circle cx="420" cy="27" r="13" fill="none" stroke="#b42318" stroke-width="1.8" stroke-dasharray="3 2"/>
+
+  <line x1="248" y1="54" x2="448" y2="54" stroke="#ececec"/>
+  <text x="264" y="82" font-size="12" fill="#4a4a4a">打开</text>
+  <text x="264" y="110" font-size="12" fill="#4a4a4a">卸载</text>
+  <text x="264" y="138" font-size="12" fill="#4a4a4a">强行停止</text>
+  <text x="264" y="166" font-size="12" fill="#4a4a4a">存储和缓存</text>
+
+  <text x="348" y="230" font-size="11" fill="#b42318" text-anchor="middle" font-weight="700">② 点右上角 ⋮ 菜单</text>
+
+  <!-- 右侧：菜单弹出 -->
+  <rect x="484" y="8" width="200" height="246" rx="14" fill="#f7f7f5" stroke="#1a1a1a" stroke-width="1.5"/>
+  <rect x="500" y="60" width="168" height="82" rx="9" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="516" y="82" font-size="12" fill="#4a4a4a">分享</text>
+  <text x="516" y="106" font-size="12" fill="#4a4a4a">创建快捷方式</text>
+  <rect x="504" y="112" width="160" height="26" rx="5" fill="#eef7ee" stroke="#1a6f3a" stroke-width="1.4"/>
+  <text x="516" y="130" font-size="12" font-weight="700" fill="#1a7f37">允许受限设置</text>
+  <text x="516" y="156" font-size="12" fill="#9a6700" font-weight="700">③ 打开这个开关</text>
+</svg>
+<figcaption>路径：设置 → 应用 → 应用管理 → 掌中灵 → 右上角 ⋮ → 允许受限设置</figcaption>
+</figure>
+
+<p>打开后回到无障碍设置页，原来的灰色开关就变得可以点击了。</p>
+
+<div class="box info">
+  <span class="t">找不到这一项？</span>
+  部分厂商 ROM（如 MIUI、HarmonyOS）把它藏在「设置 → 应用 → 掌中灵 → 权限」里，
+  或干脆没有这个限制。被控端 App 的权限页上有「打开本应用详情页」按钮，可以直接跳过去。
+</div>
+
+<h3>4.3 配对</h3>
+
+<ol>
+  <li>打开被控端 App，在配对页填写服务器地址（和家长手机一致）</li>
+  <li>输入家长手机上显示的 6 位配对码，点「绑定」</li>
+  <li>看到「已绑定」即可。此时家长手机的设备列表里会出现这台平板</li>
+</ol>
+
+<h3>4.4 逐项授予权限 <span class="tag req">决定管控是否真的生效</span></h3>
+
+<p>配对完成后，App 会列出待开启的权限。<strong>三项缺一不可</strong>：</p>
+
+<table>
+  <thead>
+    <tr><th style="width:20%">权限</th><th style="width:44%">作用</th><th>不开的后果</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>无障碍服务</strong><br><span class="tag req">必需</span></td>
+      <td>感知当前打开的是哪个应用。这是管控的「眼睛」，没有它系统不知道孩子在用什么</td>
+      <td><strong>完全不起作用</strong>。不计时、不拦截、连使用报告都是空的</td>
+    </tr>
+    <tr>
+      <td><strong>使用情况访问</strong><br><span class="tag req">必需</span></td>
+      <td>读取各应用的使用时长记录，用于统计与补算</td>
+      <td>使用报告的数字不准；进程被杀后重启无法补齐时长</td>
+    </tr>
+    <tr>
+      <td><strong>悬浮窗</strong><br><span class="tag req">必需</span></td>
+      <td>用于弹出全屏拦截页</td>
+      <td>时长到了也不会拦截——孩子可以一直玩下去</td>
+    </tr>
+    <tr>
+      <td><strong>通知</strong><br><span class="tag opt">Android 13+ 建议开</span></td>
+      <td>显示常驻的剩余时长通知</td>
+      <td>常驻通知看不见，家长也少了一条「服务活着」的证据</td>
+    </tr>
+    <tr>
+      <td><strong>设备管理器</strong><br><span class="tag strong">加固项</span></td>
+      <td>阻止孩子直接卸载本应用</td>
+      <td>管控照常生效，但孩子可以在设置里「取消激活」后卸载。家长会收到通知</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="box info">
+  <span class="t">为什么设备管理器不算「必需」</span>
+  它不影响管控是否生效，只影响「能不能被绕过」。放在必需品清单里会让家长看到
+  「还有 1 项未开启，管控无法生效」，但实际上管控已经在工作了——那反而更让人困惑。
+</div>
+
+<h3>4.5 电池优化与自启动 <span class="tag req">否则会被系统悄悄杀掉</span></h3>
+
+<p>安卓系统会为了省电清掉后台应用。被控端一旦被杀，管控就停了。<strong>必须把它加入白名单。</strong></p>
+
+<ol class="step">
+  <li><span class="st">电池优化豁免</span>
+      权限页上有「电池优化设置」按钮，把掌中灵设为<strong>不优化 / 无限制</strong>。</li>
+  <li><span class="st">允许自启动</span>
+      厂商 ROM 特有。设置 → 应用管理 → 掌中灵 → 允许自启动 / 允许后台运行。</li>
+</ol>
+
+<p>App 的「保活健康度」页会按四个维度显示当前状态：
+<strong>前台服务 / 电池优化豁免 / 精确闹钟 / 厂商白名单</strong>。
+四项都绿是最理想的；至少前两项必须是绿的。</p>
+
+<h3>4.6 激活设备管理器</h3>
+
+<p>在权限页点「激活设备管理器」，系统会弹出确认框，点「激活」。</p>
+
+<p>激活后，孩子尝试卸载时会被挡住。若孩子主动去「取消激活」，被控端会：</p>
+<ul>
+  <li>立刻把管控服务重新拉起来</li>
+  <li>给家长推送一条通知</li>
+  <li>在本地留下一笔记录（可在控制端的审计日志里看到）</li>
+</ul>
+<p>它做不到阻止取消激活，但能做到<strong>让取消无法悄悄进行</strong>。</p>
+
+<h3>4.7 （可选，最强）激活为 Device Owner</h3>
+
+<p>设备管理器模式已经够用。如果你想要「孩子连设置里的取消激活都点不到」，
+可以进一步把被控端激活为 <strong>Device Owner（设备所有者）</strong>。
+这是安卓提供的最高权限级别，代价是<strong>需要一次 ADB 操作</strong>。</p>
+
+<div class="box danger">
+  <span class="t">前提条件很严格</span>
+  设备必须<strong>没有登录过任何账号</strong>、<strong>没有设置过锁屏密码</strong>。
+  如果平板已经用了一段时间，通常只能先恢复出厂设置。
+  <br><br>
+  <strong>请务必先想清楚再动手。</strong> Device Owner 无法在系统设置里取消激活。
+</div>
+
+<figure>
+<svg viewBox="0 0 700 178" role="img" aria-label="Device Owner 激活流程">
+  <defs>
+    <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#767676"/>
+    </marker>
+  </defs>
+
+  <rect x="8" y="34" width="152" height="76" rx="9" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="84" y="60" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1a1a1a">① 恢复出厂</text>
+  <text x="84" y="78" font-size="11" text-anchor="middle" fill="#767676">开机向导里跳过</text>
+  <text x="84" y="94" font-size="11" text-anchor="middle" fill="#767676">账号与锁屏设置</text>
+
+  <line x1="164" y1="72" x2="188" y2="72" stroke="#767676" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+  <rect x="192" y="34" width="152" height="76" rx="9" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="268" y="60" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1a1a1a">② 安装被控端</text>
+  <text x="268" y="78" font-size="11" text-anchor="middle" fill="#767676">先装 APK</text>
+  <text x="268" y="94" font-size="11" text-anchor="middle" fill="#767676">但不打开</text>
+
+  <line x1="348" y1="72" x2="372" y2="72" stroke="#767676" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+  <rect x="376" y="34" width="152" height="76" rx="9" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="452" y="60" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1a1a1a">③ USB 连电脑</text>
+  <text x="452" y="78" font-size="11" text-anchor="middle" fill="#767676">打开 USB 调试</text>
+  <text x="452" y="94" font-size="11" text-anchor="middle" fill="#767676">执行激活脚本</text>
+
+  <line x1="532" y1="72" x2="556" y2="72" stroke="#767676" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+  <rect x="560" y="34" width="132" height="76" rx="9" fill="#eef7ee" stroke="#1a6f3a" stroke-width="1.5"/>
+  <text x="626" y="60" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1a7f37">④ 完成</text>
+  <text x="626" y="78" font-size="11" text-anchor="middle" fill="#1a7f37">打开 App</text>
+  <text x="626" y="94" font-size="11" text-anchor="middle" fill="#1a7f37">正常配对</text>
+
+  <text x="350" y="150" font-size="11.5" fill="#767676" text-anchor="middle">脚本：deploy/activate-device-owner.sh —— 会自动探测设备上装的是哪个包名</text>
+</svg>
+<figcaption>Device Owner 激活流程</figcaption>
+</figure>
+
+<div class="box info">
+  <span class="t">Device Owner 与设备管理器，能力差多少？</span>
+  <table style="margin-top:8px">
+    <thead><tr><th>能力</th><th>设备管理器</th><th>Device Owner</th></tr></thead>
+    <tbody>
+      <tr><td>阻止普通卸载</td><td>可（孩子可先取消激活绕过）</td><td>强制，且无法取消激活</td></tr>
+      <tr><td>隐藏桌面图标</td><td>仅隐藏桌面图标</td><td>系统级，设置里也看不到</td></tr>
+      <tr><td>禁止恢复出厂设置</td><td>不可</td><td>可，但<strong>本项目默认关闭</strong>（给家长留后路）</td></tr>
+      <tr><td>首次激活</td><td>设备上点确认</td><td>需要一次 ADB</td></tr>
+    </tbody>
+  </table>
+</div>
+
+
+<h2 id="s4">5. 配置管控规则</h2>
+
+<p>回到家长手机。点设备卡片进入配置。四个入口：</p>
+
+<h3>5.1 时长规则</h3>
+
+<table>
+  <thead><tr><th style="width:26%">项目</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>上学日 / 周末时长</td><td>分别设置。比如上学日 60 分钟、周末 120 分钟</td></tr>
+    <tr><td>额度重置时间</td><td>默认 0 点归零。<strong>建议设为凌晨 4 点</strong>——孩子熬夜的话，0 点归零等于给了他一个全新的额度</td></tr>
+    <tr><td>启用管控</td><td>总开关。关掉后所有规则失效</td></tr>
+    <tr><td>允许申请加时</td><td>打开后，孩子被拦时能看到「申请加时」按钮</td></tr>
+  </tbody>
+</table>
+
+<h3>5.2 应用管控</h3>
+
+<ul>
+  <li><strong>黑名单模式</strong>：名单里的应用不能打开。适合只禁游戏和短视频。</li>
+  <li><strong>白名单模式</strong>：只有名单里的应用能打开。适合低龄孩子，管控更彻底。</li>
+  <li><strong>逐应用规则</strong>：可以给单个应用单独设每日上限和允许时段，
+      比如「微信每天 30 分钟，19:00–20:00 之间」。</li>
+  <li><strong>用时不计入当日总时长</strong>：展开某个应用后打开这个开关，它消耗的时间就不占
+      当天的总时长，<strong>总时长用完后它仍然打得开</strong>。典型用法是让学习类应用
+      不被娱乐额度拖累。注意该应用自己的「单日上限」和「允许时段」照常生效，
+      所以它不会变成无限使用 —— 想限制时，给它单独设一个每日上限即可。</li>
+</ul>
+
+<p>点「刷新应用清单」可以让平板重新上报一次已安装应用。系统组件不会出现在清单里。</p>
+
+<div class="box warn">
+  <span class="t">放行一个应用 ≠ 给了无限额度</span>
+  即使你单独放行了「作业帮」，它<strong>仍然消耗当天的总时长</strong>。
+  这是刻意的：放行是「允许用」，不是「不限量」。
+</div>
+
+<h3>5.3 限制工具（临时操作）</h3>
+
+<table>
+  <thead><tr><th style="width:26%">操作</th><th>效果</th></tr></thead>
+  <tbody>
+    <tr><td>立即锁定</td><td>平板上立刻弹出全屏锁定页，<strong>压过一切规则</strong>，且不给孩子申请入口</td></tr>
+    <tr><td>加时</td><td>+15 / +30 / +60 分钟。只对<strong>当天</strong>有效，过了归零点自动失效</td></tr>
+    <tr><td>单应用放行</td><td>指定一个应用在指定时间内可用，仍受总时长约束</td></tr>
+    <tr><td>临时总解封</td><td>一段时间内完全不限。适合周末或假期</td></tr>
+  </tbody>
+</table>
+
+<p>所有生效中的授权都列在下方，可以随时撤销。</p>
+
+<h3>5.4 使用报告与截屏</h3>
+
+<ul>
+  <li><strong>使用报告</strong>：今日额度进度、近 7/14/30 日趋势、应用排行、拦截记录、会话时间线</li>
+  <li><strong>截屏</strong>：点一次拍一张，不是定时也不是实时。<strong>Android 11 以下拍不了</strong>（见附录）</li>
+  <li><strong>审计日志</strong>：谁在什么时候做了什么，全部留痕</li>
+</ul>
+
+<div class="box info">
+  <span class="t">离线也能管</span>
+  规则和当天的计时都存在平板本地。平板断网时，管控照常生效，
+  使用记录先攒着，联网后自动补传。<strong>断网不是绕过管控的办法。</strong>
+</div>
+
+
+<h2 id="s5">6. 离线密码</h2>
+
+<p>用于在没有网络、或家长手机不在身边时紧急处理。分三级，能力递增：</p>
+
+<table>
+  <thead><tr><th style="width:14%">级别</th><th style="width:26%">能做什么</th><th>典型场景</th></tr></thead>
+  <tbody>
+    <tr><td><strong>L1 日常</strong></td><td>加时（+15 / +30 / +60）</td><td>说好了多看半小时，但手机没带</td></tr>
+    <tr><td><strong>L2 管理</strong></td><td>放行某个应用、解除某应用的时段限制</td><td>临时需要用一下某个被禁的应用</td></tr>
+    <tr><td><strong>L3 超级</strong></td><td>退出管控、解除设备管理器、卸载本应用</td><td>彻底不用了，或要转手设备</td></tr>
+  </tbody>
+</table>
+
+<h3>6.1 设置密码</h3>
+
+<p>在控制端设备卡片上点<strong>「设置离线密码」</strong>（尚未设置密码时按钮会显示这个名字并标红；
+设置过之后叫「设备加固」）打开面板，里面可以逐级设置或清除密码，也可以在被控端本地设置。
+密码要求至少 6 位，且不能是 <code>123456</code>、生日、连号这类弱口令。</p>
+
+<div class="box warn">
+  <span class="t">密码忘掉就麻烦了</span>
+  系统只保存密码的哈希值（PBKDF2，12 万次迭代），<strong>无法找回，只能重置</strong>。
+  建议用家长自己记得住、孩子猜不到的 6 位数字，并写在一个安全的地方。
+  <br><br>
+  好在即使忘了 L3，你仍可以：用家长手机远程重置（需设备在线），
+  或者对平板做恢复出厂设置——<strong>本项目默认不禁用恢复出厂设置，就是为这种情况留的后路</strong>。
+</div>
+
+<h3>6.2 在哪里输入密码</h3>
+
+<p>密码输入框<strong>直接显示在拦截页上</strong>——孩子被挡住时，家长在
+「申请加时」按钮下方就能看到「家长密码」输入框，输入密码点「验证」即可。
+验证通过后会展开对应的操作按钮：</p>
+
+<table>
+  <thead><tr><th style="width:34%">密码级别</th><th>验证通过后可执行</th></tr></thead>
+  <tbody>
+    <tr><td>日常密码（L1）</td><td>+15 / +30 / +60 / +120 分钟四档加时</td></tr>
+    <tr><td>管理密码（L2）</td><td>加时 · 放行当前被拦的应用 30 分钟</td></tr>
+    <tr><td>超级密码（L3）</td><td>加时 · 放行应用 · <strong>退出管控</strong>（需二次确认）</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  旧版本的三个隐藏入口（连点标题 5 次 / 长按右下角 3 秒 / 拨号盘
+  <code>*#*#8899#*#*</code>）已<strong>移除</strong>：真机上入口难发现、
+  弹出的密码界面又会被拦截页挡住。现在一切都在拦截页上直接完成。
+</div>
+
+<h3>6.3 输错会怎样</h3>
+
+<p>错误 5 次锁 10 分钟，10 次锁 1 小时。失败尝试会记录并上报，
+家长可以在「设备加固」面板里看到孩子的破解尝试记录。</p>
+
+
+<h2 id="s6">7. 日常使用</h2>
+
+<h3>孩子会看到什么</h3>
+
+<figure>
+<svg viewBox="0 0 700 224" role="img" aria-label="被拦截时平板上显示的界面">
+  <rect x="140" y="10" width="180" height="204" rx="14" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/>
+  <rect x="152" y="24" width="156" height="176" rx="8" fill="#f7f7f5"/>
+
+  <text x="230" y="72" font-size="13.5" font-weight="700" text-anchor="middle" fill="#1a1a1a">今天的时长用完了</text>
+  <text x="230" y="96" font-size="11" text-anchor="middle" fill="#767676">明天 0:00 后可以继续使用</text>
+
+  <rect x="176" y="120" width="108" height="30" rx="7" fill="#fff" stroke="#1a1a1a" stroke-width="1.4"/>
+  <text x="230" y="140" font-size="12" text-anchor="middle" fill="#1a1a1a">申请加时</text>
+
+  <rect x="176" y="158" width="108" height="30" rx="7" fill="#f7f7f5" stroke="#dcdcdc" stroke-width="1.2"/>
+  <text x="230" y="178" font-size="12" text-anchor="middle" fill="#767676">返回桌面</text>
+
+  <text x="230" y="205" font-size="10.5" text-anchor="middle" fill="#9a6700">任何按键都退不出去</text>
+
+  <text x="380" y="60" font-size="12.5" font-weight="700" fill="#1a1a1a">说明</text>
+  <text x="380" y="86" font-size="11.5" fill="#4a4a4a">· 拦截页会盖住整个屏幕，包括返回键</text>
+  <text x="380" y="110" font-size="11.5" fill="#4a4a4a">· 孩子只能选「申请加时」或回桌面</text>
+  <text x="380" y="134" font-size="11.5" fill="#4a4a4a">· 「立即锁定」时不会显示申请按钮</text>
+  <text x="380" y="158" font-size="11.5" fill="#4a4a4a">· 常驻通知里一直显示剩余时长</text>
+  <text x="380" y="182" font-size="11.5" fill="#4a4a4a">· 系统组件与桌面不计入时长</text>
+</svg>
+<figcaption>被拦截时，平板上的样子</figcaption>
+</figure>
+
+<h3>常见场景怎么处理</h3>
+
+<table>
+  <thead><tr><th style="width:32%">场景</th><th>怎么做</th></tr></thead>
+  <tbody>
+    <tr><td>今天作业多，想多给 30 分钟</td><td>限制工具 → 加时 → +30 分钟</td></tr>
+    <tr><td>孩子说「我就查个资料」</td><td>让孩子在拦截页点「申请加时」，你在手机顶栏的角标里处理，可以只批一半</td></tr>
+    <tr><td>吃饭时间，全部停掉</td><td>限制工具 → 立即锁定</td></tr>
+    <tr><td>周末想完全放开</td><td>限制工具 → 临时总解封，选好时长</td></tr>
+    <tr><td>想看看孩子到底在玩什么</td><td>使用报告 → 应用排行；必要时点一次截屏</td></tr>
+    <tr><td>平板不在身边，被控端离线</td><td>照常下发指令，<strong>平板下次联网时会立刻执行</strong></td></tr>
+  </tbody>
+</table>
+
+
+<h2 id="s7">8. 故障排查</h2>
+
+<table>
+  <thead><tr><th style="width:30%">现象</th><th>原因与处理</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>App 连不上服务器</td>
+      <td>① 安全组是否放行端口 8111（<strong>最常见</strong>）② 服务器上
+          <code>curl http://127.0.0.1:8111/api/health</code> 是否正常
+          ③ 容器是否在跑：<code>docker compose ps</code></td>
+    </tr>
+    <tr>
+      <td>管控完全不生效</td>
+      <td>九成是<strong>无障碍服务没开</strong>，或开了但被系统关掉了。
+          看控制端设备卡片上的权限状态；被控端「权限」页也会显示</td>
+    </tr>
+    <tr>
+      <td>到点了却不拦截</td>
+      <td>检查<strong>悬浮窗权限</strong>。无障碍负责判断，悬浮窗负责弹页面，缺一不可</td>
+    </tr>
+    <tr>
+      <td>用着用着就不管了</td>
+      <td>被系统省电策略杀掉了。去设置里把掌中灵设为<strong>不优化电池</strong>、
+          允许<strong>自启动</strong>。厂商 ROM（小米/华为/OPPO/vivo）尤其要注意</td>
+    </tr>
+    <tr>
+      <td>使用报告里「今日用量」是 0</td>
+      <td>服务器时区不对。检查 <code>.env</code> 里是否为 <code>TZ=Asia/Shanghai</code>，
+          改完 <code>./install.sh --update</code> 重建容器</td>
+    </tr>
+    <tr>
+      <td>无障碍开关是灰的，点不动</td>
+      <td>Android 13+ 的受限设置没开。见 4.2 节</td>
+    </tr>
+    <tr>
+      <td>截屏一直失败</td>
+      <td>平板是 Android 10 或更低。<strong>系统限制，无解</strong>——见附录</td>
+    </tr>
+    <tr>
+      <td>配对码无效</td>
+      <td>超过 5 分钟过期了，重新生成一个</td>
+    </tr>
+    <tr>
+      <td>孩子能自己卸载</td>
+      <td>设备管理器没激活，或者已被取消激活。控制端会收到通知，重新激活即可</td>
+    </tr>
+    <tr>
+      <td>想换一台服务器</td>
+      <td>把备份的 <code>/data</code> 恢复到新服务器，改 App 里的服务器地址即可。
+          <strong>不需要重新配对</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>在服务器上看日志</h3>
+
+<pre><code>cd /opt/zzl/deploy
+docker compose logs -f zzl-server        # 实时日志（Ctrl+C 退出）
+docker compose restart                   # 重启服务
+docker compose exec zzl-server node scripts/smoke.js   # 端到端自检</code></pre>
+
+
+<h2 id="s8">9. 退出管控与卸载</h2>
+
+<div class="box danger">
+  <span class="t">顺序不能乱</span>
+  卸载前必须先在 App 内「退出管控」。直接卸载会被设备管理器拦住，
+  而且本地残留的保活组件下次开机还会尝试把服务拉起来。
+</div>
+
+<ol class="step">
+  <li><span class="st">在控制端解除所有限制</span>
+      限制工具 → 撤销全部生效中的授权；如果是锁定状态，先解除锁定。</li>
+
+  <li><span class="st">在被控端退出管控</span>
+      用 L3 超级密码呼出密码键盘 → 选择「退出管控」。
+      这一步会依次：停止服务 → 取消保活任务与闹钟 → 清除配对会话 →
+      清空本地策略与密码 → 解除卸载阻止 → 引导取消设备管理器。
+      <br><span style="color:#9a6700">顺序是刻意设计的：漏掉「清除配对会话」的话，第二天开机会把管控重新拉起来。</span></li>
+
+  <li><span class="st">取消设备管理器激活</span>
+      按引导进入设置 → 安全 → 设备管理应用 → 掌中灵 → 取消激活。</li>
+
+  <li><span class="st">卸载两个 App</span>
+      此时可以正常卸载了。若之前激活过 Device Owner，
+      还需先在「设备加固」面板里解除，否则卸载会被系统拒绝。</li>
+
+  <li><span class="st">（可选）清理控制端条目</span>
+      被控端退出后，控制端列表里它还会以「离线」状态显示。
+      点设备卡片上的「删除」并确认，即可移除这条记录——
+      服务器会连同该设备的策略、使用记录与截屏文件一起删除；
+      若设备此时仍在线，它会收到通知并自动回到配对页。
+      以后重新配对：记录已删除就新增一条，没删除就沿用原记录（同一台平板不会出现两条）。</li>
+</ol>
+
+
+<h2 id="s9">10. 附录：能力边界</h2>
+
+<p class="lead">这一节列的是<strong>系统限制</strong>，不是软件缺陷。提前知道能省很多困惑。</p>
+
+<h3>10.1 截屏</h3>
+
+<table>
+  <thead><tr><th>平板系统版本</th><th>能否远程静默截屏</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>Android 11 及以上</td><td><strong>能</strong></td><td>用无障碍服务截图，孩子完全无感知</td></tr>
+    <tr><td>Android 10 及以下</td><td><strong>不能</strong></td><td>系统没有提供无声截图接口</td></tr>
+  </tbody>
+</table>
+
+<div class="box warn">
+  <span class="t">为什么低版本不做「弹窗授权」的降级方案</span>
+  另一条技术路线是使用系统录屏授权，但它<strong>必须当着孩子的面弹出一个确认框</strong>。
+  孩子点「取消」之后照样拿不到图——既暴露了「正在被监控」这个事实，又失败了。
+  相比之下，明确告诉你「此设备不支持」是更诚实的选择。
+</div>
+
+<h3>10.2 隐藏图标</h3>
+
+<table>
+  <thead><tr><th>模式</th><th>效果</th></tr></thead>
+  <tbody>
+    <tr><td>Device Owner</td><td>系统级隐藏：在「设置 → 应用」里也看不到</td></tr>
+    <tr><td>设备管理器 / 普通</td><td><strong>仅隐藏桌面图标</strong>：应用列表里仍能找到并打开</td></tr>
+  </tbody>
+</table>
+
+<p>隐藏只是「降低存在感」。真正的防绕过靠的是设备管理与无障碍，不是把图标藏起来。</p>
+
+<h3>10.3 其他已知限制</h3>
+
+<ul>
+  <li><strong>「免 root」的代价</strong>：没有 root 就无法做到「绝对无法绕过」。
+      这套方案的目标是让绕过变得足够麻烦、并且一定留下痕迹，而不是提供技术上的绝对封锁。</li>
+  <li><strong>无法拦截系统设置本身</strong>：孩子仍能进入系统设置页面。
+      设备管理器被取消激活时你会收到通知，这是设计上的兜底。</li>
+  <li><strong>厂商 ROM 差异</strong>：小米、华为、荣耀、OPPO、vivo 的后台管理策略各不相同，
+      保活效果有别。App 内的「保活健康度」会显示四维状态供你逐项检查。</li>
+</ul>
+
+<hr>
+
+<p style="color:#767676;font-size:13.5px">
+掌中灵 1.0.0 ｜ 完整技术方案见项目内 <code>docs/需求规格与技术方案.md</code>，
+服务器部署细节见 <code>docs/部署指南.md</code>。
+</p>
+
+</body>
+</html>

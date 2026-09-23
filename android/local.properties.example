@@ -1,0 +1,19 @@
+# 复制为 local.properties 后按实际情况填写。
+# 该文件不提交到版本库。
+
+# Android SDK 路径（Android Studio 通常会自动写入）
+# sdk.dir=C\:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk
+
+# ===== Release 签名（生成方式见 README）=====
+# 未配置时 release 包不会被签名，只能构建 debug 包
+# RELEASE_STORE_FILE=../keystore/zhangzhongling.jks
+# RELEASE_STORE_PASSWORD=
+# RELEASE_KEY_ALIAS=zhangzhongling
+# RELEASE_KEY_PASSWORD=
+
+# ===== 编译期服务器默认值（本机私有，不入库）=====
+# 这里的值会覆盖 android/gradle.properties 中的同名项（后者已脱敏为示例地址）。
+# 不填也没关系：打完包后在 App 的「服务器设置」里手填即可，运行期优先级更高。
+# SERVER_HOST=你的服务器IP或域名
+# SERVER_PORT=8111
+# SERVER_SCHEME=http

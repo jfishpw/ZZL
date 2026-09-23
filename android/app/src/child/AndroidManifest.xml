@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      以下权限与组件仅被控端（child flavor）需要。
+        M2 — 无障碍服务、悬浮窗拦截、使用情况统计、前台服务
+        M5 — 设备管理器、离线密码、保活
+    -->
+
+    <!-- 读取各应用使用时长与历史 -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- 到时全屏遮盖拦截 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- 前台常驻服务（Android 14 需声明具体类型） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- 开机自启与保活 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- 通知（Android 13+），前台服务必须常驻通知 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 获取已安装应用清单，供家长配置黑白名单 -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <application>
+
+        <!-- 前台应用感知：管控引擎的眼睛 -->
+        <service
+            android:name=".child.service.GuardAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- 常驻服务：心跳、策略同步、记录上报 -->
+        <service
+            android:name=".child.service.GuardForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="child_device_usage_guard" />
+        </service>
+
+        <!--
+          设备管理器：防卸载体系的核心。
+          onDisabled 回调是"孩子正在取消激活"的最早信号，
+          也是 Device Admin 模式下唯一能感知被绕过的地方。
+        -->
+        <receiver
+            android:name=".child.admin.GuardDeviceAdminReceiver"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:description="@string/device_admin_description"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 开机自启 -->
+        <receiver
+            android:name=".child.service.GuardBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          保活闹钟的接收器：一次性闹钟触发后重新安排下一次。
+          用 receiver 而不是直接进 Service，是因为 PendingIntent 的目标越轻，
+          被系统在 Doze 下延迟的概率越低。
+        -->
+        <receiver
+            android:name=".child.service.GuardAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

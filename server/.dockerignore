@@ -1,0 +1,9 @@
+node_modules
+_old_node_modules
+data
+.cache
+.git
+.gitignore
+Dockerfile
+*.log
+*.md

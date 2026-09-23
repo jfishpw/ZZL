@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  设备管理器策略声明。
+
+  这里**刻意留空**，原因是：防卸载所需的 `setUninstallBlocked()`
+  只要求"是设备管理器"，不要求声明任何具体策略。
+
+  而每多声明一项，家长在系统激活页看到的权限提示就多一条 ——
+  「擦除数据」「重置密码」这类声明会让家长强烈不安，
+  我们实际上也确实不需要它们。
+
+  换句话说：只声明真正会用到的能力，这里一项都没有。
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies />
+</device-admin>

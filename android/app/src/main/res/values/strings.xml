@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 注意：app_name 由 build.gradle.kts 的 resValue 按角色注入，此处不可重复定义 -->
+    <string name="loading">加载中…</string>
+    <string name="server_settings">服务器设置</string>
+    <string name="restore_default">恢复默认</string>
+</resources>
