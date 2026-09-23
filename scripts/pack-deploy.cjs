@@ -48,7 +48,7 @@ args.push(...ENTRIES);
  * ⚠️ 归档名必须用**相对文件名**（配合 cwd），不能用 `OUT` 这个绝对路径。
  *
  * GNU tar 把「主机:路径」解析为远程归档，而 Windows 盘符里的冒号会被误判成主机名：
- *   tar -czf D:\pwg\监管软件\zzl-deploy.tar.gz ...
+ *   tar -czf D:\path\to\project\zzl-deploy.tar.gz ...
  *   → tar (child): Cannot connect to D: resolve failed   （退出码 2）
  * 这类报错在 Windows 上极具迷惑性，看起来像路径不存在或权限问题。
  * 传相对名对 GNU tar 与 Windows 自带的 bsdtar 都成立。

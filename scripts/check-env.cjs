@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const root = 'D:/pwg/监管软件/server';
+const root = path.resolve(__dirname, '..', 'server');
 
 console.log('== server 目录 ==');
 try {

@@ -14,9 +14,9 @@ const { execFileSync } = require('node:child_process');
 
 const URL = 'https://mirrors.huaweicloud.com/openjdk/17.0.2/openjdk-17.0.2_windows-x64_bin.zip';
 
-const cacheDir = 'D:/pwg/监管软件/.cache';
+const cacheDir = path.resolve(__dirname, '..', '.cache');
 const zipPath = path.join(cacheDir, 'openjdk17.zip');
-const jdksDir = 'C:/Users/Administrator/.jdks';
+const jdksDir = process.env.JDKS_DIR || path.join(require('node:os').homedir(), '.jdks');
 const target = path.join(jdksDir, 'temurin-17');
 
 if (fs.existsSync(path.join(target, 'bin', 'java.exe'))) {

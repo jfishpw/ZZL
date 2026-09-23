@@ -146,28 +146,14 @@ android {
     /**
      * JVM 单元测试的编码设置。
      *
-     * ⚠️ **这组参数并没有解决下面描述的问题**，保留它只是因为对测试环境本身是合理的
-     * （让 fork 出来的测试 JVM 也用 UTF-8，避免断言里的中文比较出现意外）。
+     * 让 fork 出来的测试 JVM 使用 UTF-8，避免断言里的中文比较出现意外。
      *
-     * --- 真正的原因与结论（实测，2026-09）---
+     * 提示：若你的项目路径包含非 ASCII 字符，Windows 上 fork 出的测试 worker
+     * 可能解析不到 classpath（类已编译但运行时抛 ClassNotFoundException）。
+     * 此时可用 GRADLE_CWD 把构建目录指到一个纯 ASCII 路径（例如指向 android/
+     * 的目录联接）再跑测试：
      *
-     * 本项目路径含中文（`D:\pwg\监管软件`）。在这个路径下跑单元测试，会出现：
-     *   - 测试类**已经编译出来了**（`build/tmp/kotlin-classes/childDebugUnitTest/` 下能看到 .class）
-     *   - Gradle 也正确列出了 6 个测试类名
-     *   - 但 fork 出来的测试 worker 执行 `Class.forName` 时抛 `ClassNotFoundException`
-     *
-     * 也就是说：问题出在**传给测试 worker 的 classpath**，中文路径在其中被错误解码，
-     * 而不是测试代码或编译产物本身。给测试 JVM 加 `-Dfile.encoding` / `-Dsun.jnu.encoding`
-     * 都无效，因为故障发生在 classpath 解析阶段，早于这些属性生效。
-     *
-     * **结论：单元测试必须在 ASCII 路径下运行。** 本项目已有的 ASCII 目录联接
-     * `D:\pwg\zzl-build`（指向 android/）正是为此存在：
-     *
-     *     GRADLE_CWD="D:/pwg/zzl-build" node scripts/gradle-run.cjs "<jdk>" :app:testChildDebugUnitTest
-     *
-     * 注意这与 `assembleRelease` 的要求**正好相反** —— 打包必须用真实路径
-     * （命令沙箱不解析目录联接，会拒绝联接路径下的写入）。两个任务各用各的路径，
-     * 详见 README「非 ASCII 路径限制」与「构建报拒绝访问的两个根因」。
+     *     GRADLE_CWD="<ascii路径>" node scripts/gradle-run.cjs "<jdk>" :app:testChildDebugUnitTest
      */
     testOptions {
         unitTests.all {

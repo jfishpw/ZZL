@@ -2,7 +2,7 @@
 # 该文件不提交到版本库。
 
 # Android SDK 路径（Android Studio 通常会自动写入）
-# sdk.dir=C\:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk
+# sdk.dir=C\:\\<你的用户名>\\AppData\\Local\\Android\\Sdk
 
 # ===== Release 签名（生成方式见 README）=====
 # 未配置时 release 包不会被签名，只能构建 debug 包

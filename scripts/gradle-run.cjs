@@ -4,38 +4,48 @@
  *
  * 输出直接透传（stdio inherit），便于后台运行时观察进度。
  *
- * 构建目录可用 GRADLE_CWD 覆盖，默认是 android/ 的**真实路径**。
+ * Gradle 可执行文件按下列顺序探测：
+ *   1. 环境变量 GRADLE_BIN（显式指定）
+ *   2. Gradle wrapper 本地发行版缓存（~/.gradle/wrapper/dists/ 下的 gradle-8.13-*）
+ *
+ * 构建目录可用 GRADLE_CWD 覆盖，默认是 android/。
  */
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const jdkHome = process.argv[2];
 const args = process.argv.slice(3);
 
-const GRADLE = 'C:/Users/Administrator/.gradle/wrapper/dists/gradle-8.13-all/54h0s9kvb6g2sinako7ub77ku/gradle-8.13/bin/gradle.bat';
+function findGradle() {
+  if (process.env.GRADLE_BIN && fs.existsSync(process.env.GRADLE_BIN)) {
+    return process.env.GRADLE_BIN;
+  }
+  const gradleUserHome = process.env.GRADLE_USER_HOME || path.join(os.homedir(), '.gradle');
+  const dists = path.join(gradleUserHome, 'wrapper', 'dists');
+  try {
+    for (const ver of fs.readdirSync(dists)) {
+      if (!/^gradle-8\.13-/.test(ver)) continue;
+      for (const hash of fs.readdirSync(path.join(dists, ver))) {
+        const candidate = path.join(dists, ver, hash, 'gradle-8.13', 'bin', 'gradle.bat');
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    }
+  } catch {
+    // 目录不存在则走下面的报错
+  }
+  return null;
+}
 
-if (!fs.existsSync(GRADLE)) {
-  console.error('Gradle 未找到: ' + GRADLE);
+const GRADLE = findGradle();
+
+if (!GRADLE) {
+  console.error('未找到 Gradle 8.13：请先用 gradle wrapper 同步一次（Android Studio 首次打开会自动下载），');
+  console.error('或设置环境变量 GRADLE_BIN 指向 gradle.bat。');
   process.exit(1);
 }
 
-/**
- * ★ 默认从**真实路径**构建，而不是 D:\pwg\zzl-build 这个 ASCII 联接。
- *
- * 历史上创建该联接是为了绕开 AGP 的「路径含非 ASCII 字符」拒绝。
- * 但现在 android/gradle.properties 里已开启 android.overridePathCheck=true，
- * 真实路径可以直接构建 —— 而联接反而带来一个更难查的问题：
- *
- *   **命令沙箱不解析目录联接。** 它取命令行里的路径字符串，
- *   判定 D:\pwg\zzl-build\... 落在工作目录（D:\pwg\监管软件）之外，直接拒绝读写。
- *   底层报出来的却是 AccessDeniedException / FileNotFoundException，
- *   看起来完全像文件锁或杀软，实测为此排查了很久。
- *
- * 两者产物是同一个目录（联接本就指向 android/），所以改用真实路径没有任何副作用。
- * 若某个工具链确实因中文路径失败，可显式传 GRADLE_CWD 切回联接
- * （但那时需要以允许访问该路径的方式运行）。
- */
 const DEFAULT_CWD = path.resolve(__dirname, '..', 'android');
 
 const result = spawnSync('cmd.exe', ['/c', GRADLE, ...args], {

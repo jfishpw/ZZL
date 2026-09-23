@@ -17,14 +17,14 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const ANDROID_DIR = 'D:/pwg/监管软件/android';
+const ANDROID_DIR = path.resolve(__dirname, '..', 'android');
 const KEYSTORE_REL = 'keystore/zhangzhongling.jks'; // 相对 android/ （build.gradle.kts 用 rootProject.file 解析）
 const KEYSTORE_ABS = path.join(ANDROID_DIR, KEYSTORE_REL);
 const LOCAL_PROPS = path.join(ANDROID_DIR, 'local.properties');
 const ALIAS = 'zhangzhongling';
 const VALIDITY_DAYS = 10000; // ≈27 年
 
-const JDK_HOME = 'C:/Users/Administrator/.jdks/temurin-17';
+const JDK_HOME = process.env.JDK_HOME || path.join(require('node:os').homedir(), '.jdks', 'temurin-17');
 const KEYTOOL = path.join(JDK_HOME, 'bin', 'keytool.exe');
 
 const force = process.argv.includes('--force');

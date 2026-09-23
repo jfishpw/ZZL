@@ -4,24 +4,11 @@
  * 用法：node scripts/build-release.cjs [--minify]
  *
  * ---------------------------------------------------------------------------
- * ★ 为什么必须从**真实路径**构建，而不是 D:\pwg\zzl-build 这个 junction
+ * 构建路径说明
  * ---------------------------------------------------------------------------
- *
- * 项目路径含中文（D:\pwg\监管软件），AGP 在 Windows 上默认拒绝这种路径，
- * 于是早期创建了 ASCII 目录联接 D:\pwg\zzl-build 指向 android/ 来绕开。
- *
- * 但联接会引入一个新问题：**命令沙箱不解析联接**。
- * 沙箱取的是命令行里那个路径字符串（D:\pwg\zzl-build\...），
- * 判定它落在工作目录（D:\pwg\监管软件）之外，直接拒绝读写。
- * 底层报出来的错误却是 `AccessDeniedException` / `FileNotFoundException`，
- * 看起来完全像文件锁或杀软 —— 极难定位，实测排查了很久。
- *
- * 由于 android/gradle.properties 里已经开了 `android.overridePathCheck=true`，
- * 直接从中文字符的真实路径构建是可行的，而且**产物是同一个目录**
- * （联接本来就指向 android/）。所以这里默认走真实路径。
- *
- * 若某个工具链（aapt2 / NDK）确实因中文路径失败，可用 GRADLE_CWD
- * 显式切回联接路径 —— 但那时需要用允许访问该路径的方式运行。
+ * 默认从 android/ 的真实路径构建。若你的项目路径包含非 ASCII 字符，
+ * 需要保留 android/gradle.properties 里的 `android.overridePathCheck=true`，
+ * 否则 AGP 在 Windows 上会直接拒绝构建。
  *
  * ---------------------------------------------------------------------------
  * 保留下来的第二类故障处置：构建中间产物被并发占用
@@ -37,11 +24,12 @@
  * ⚠️ 不要在别处同时跑 gradle 或跑满载 CPU 的任务，会重现同一错误。
  */
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const JDK = process.env.JDK_HOME || 'C:/Users/Administrator/.jdks/temurin-17';
+const JDK = process.env.JDK_HOME || path.join(os.homedir(), '.jdks', 'temurin-17');
 const GRADLE_RUN = path.join(ROOT, 'scripts', 'gradle-run.cjs');
 const LOG = path.join(ROOT, '.workbuddy', 'release-build.log');
 
@@ -243,7 +231,7 @@ for (let attempt = 1; attempt <= 2; attempt += 1) {
     log('[!] 检测到失败原因是**命令沙箱拦截**，不是文件锁。重试无用。');
     log('    沙箱不解析目录联接，路径字符串落在工作目录之外就会被拒绝。');
     log(`    当前构建目录：${BUILD_DIR}`);
-    log('    若它仍是 D:/pwg/zzl-build 这个联接，请改用真实路径（去掉 GRADLE_CWD 即可）。');
+    log('    若它不在 android/ 真实路径下（GRADLE_CWD 指向了别处），请去掉 GRADLE_CWD 重试。');
     break;
   }
 

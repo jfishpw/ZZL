@@ -18,7 +18,8 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const SDK = process.env.ANDROID_SDK_ROOT || 'C:/Users/Administrator/AppData/Local/Android/Sdk';
+const SDK = process.env.ANDROID_SDK_ROOT
+  || path.join(require('node:os').homedir(), 'AppData', 'Local', 'Android', 'Sdk');
 const BUILD_TOOLS = process.env.BUILD_TOOLS || '34.0.0';
 
 const APKSIGNER = path.join(SDK, 'build-tools', BUILD_TOOLS, 'apksigner.bat');
