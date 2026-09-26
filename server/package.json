@@ -1,6 +1,6 @@
 {
   "name": "zhangzhongling-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "掌中灵 — 儿童平板监管系统中继服务",

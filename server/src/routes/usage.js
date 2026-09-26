@@ -40,6 +40,24 @@ function recentDayKeys(days) {
   return keys;
 }
 
+/** 解析可选的 from/to 日期范围查询参数：合法且 from<=to 且跨度<=90 天时返回日序列，否则 null */
+function optionalDayRange(query) {
+  const from = typeof query?.from === 'string' && DAY_KEY_RE.test(query.from) ? query.from : null;
+  const to = typeof query?.to === 'string' && DAY_KEY_RE.test(query.to) ? query.to : null;
+  if (!from || !to || from > to) return null;
+  const start = new Date(Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1, Number(from.slice(8, 10)));
+  const end = new Date(Number(to.slice(0, 4)), Number(to.slice(5, 7)) - 1, Number(to.slice(8, 10)));
+  const span = Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  if (span <= 0 || span > 90) return null;
+  const keys = [];
+  for (let i = 0; i < span; i += 1) {
+    const d = new Date(start.getTime());
+    d.setDate(d.getDate() + i);
+    keys.push(dayKeyOf(d));
+  }
+  return keys;
+}
+
 /**
  * 该日期适用的每日总时长。
  *
@@ -358,7 +376,9 @@ export default async function usageRoutes(fastify) {
     const daysRaw = Number(request.query?.days);
     const days = Number.isInteger(daysRaw) && daysRaw > 0 && daysRaw <= 60 ? daysRaw : 7;
 
-    const keys = recentDayKeys(days);
+    // 自定义日期范围优先：合法的 from/to 覆盖默认的「近 N 天」
+    const rangeKeys = optionalDayRange(request.query);
+    const keys = rangeKeys ?? recentDayKeys(days);
     const rules = appRulesFor(device.id);
 
     // 取回逐日逐应用的明细，在 JS 里聚合，而不是让 SQL 一口气 SUM。
@@ -404,7 +424,7 @@ export default async function usageRoutes(fastify) {
     });
 
     return {
-      days,
+      days: keys.length,
       points,
       totalMs: points.reduce((sum, p) => sum + p.totalMs, 0),
       averageMs: Math.round(points.reduce((sum, p) => sum + p.totalMs, 0) / points.length),
@@ -427,7 +447,7 @@ export default async function usageRoutes(fastify) {
     const limitRaw = Number(request.query?.limit);
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 && limitRaw <= 100 ? limitRaw : 20;
 
-    const keys = recentDayKeys(days);
+    const keys = optionalDayRange(request.query) ?? recentDayKeys(days);
     const rows = all(
       `SELECT package_name,
               COALESCE(SUM(total_ms), 0)   AS total_ms,
@@ -469,7 +489,20 @@ export default async function usageRoutes(fastify) {
     const conditions = ['device_id = ?'];
     const params = [device.id];
 
-    if (date) {
+    const from = typeof request.query?.from === 'string' && DAY_KEY_RE.test(request.query.from)
+      ? request.query.from
+      : null;
+    const to = typeof request.query?.to === 'string' && DAY_KEY_RE.test(request.query.to)
+      ? request.query.to
+      : null;
+    if (from && to && from <= to) {
+      const [fy, fm, fd] = from.split('-').map(Number);
+      const [ty, tm, td] = to.split('-').map(Number);
+      const start = new Date(fy, fm - 1, fd, 0, 0, 0, 0).getTime();
+      const end = new Date(ty, tm - 1, td + 1, 0, 0, 0, 0).getTime();
+      conditions.push('ts >= ? AND ts < ?');
+      params.push(start, end);
+    } else if (date) {
       // 用本地日界过滤：拦截时间戳是毫秒，跨零点归日与使用记录的口径不同，
       // 这里按自然日统计，家长看的是"哪天"，不需要额度日那套归日逻辑
       const [y, m, d] = date.split('-').map(Number);
@@ -511,7 +544,16 @@ export default async function usageRoutes(fastify) {
     const conditions = ['device_id = ?'];
     const params = [device.id];
 
-    if (typeof date === 'string' && DAY_KEY_RE.test(date)) {
+    const from = typeof request.query?.from === 'string' && DAY_KEY_RE.test(request.query.from)
+      ? request.query.from
+      : null;
+    const to = typeof request.query?.to === 'string' && DAY_KEY_RE.test(request.query.to)
+      ? request.query.to
+      : null;
+    if (from && to && from <= to) {
+      conditions.push('day_key >= ? AND day_key <= ?');
+      params.push(from, to);
+    } else if (typeof date === 'string' && DAY_KEY_RE.test(date)) {
       conditions.push('day_key = ?');
       params.push(date);
     }

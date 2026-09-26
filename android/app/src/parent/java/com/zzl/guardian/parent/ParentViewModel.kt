@@ -96,6 +96,11 @@ class ParentViewModel @Inject constructor(
         /* ---------------- 使用报告（M4） ---------------- */
         val reportDeviceId: Long? = null,
         val reportDays: Int = 7,
+        /** 自定义日期范围（dayKey，如 2026-09-01）。非空时覆盖 reportDays 的「近 N 天」口径 */
+        val reportFrom: String? = null,
+        val reportTo: String? = null,
+        /** 趋势图上被点选的日期（dayKey）。非空时时间线与拦截记录只显示该日 */
+        val reportSelectedDay: String? = null,
         val overview: UsageOverviewDto? = null,
         val trend: UsageTrendDto? = null,
         val ranking: UsageRankingDto? = null,
@@ -759,6 +764,9 @@ class ParentViewModel @Inject constructor(
                 ranking = null,
                 sessions = emptyList(),
                 blocks = emptyList(),
+                reportFrom = null,
+                reportTo = null,
+                reportSelectedDay = null,
                 // 与编辑类面板互斥
                 editingDeviceId = null,
                 policy = null,
@@ -774,13 +782,94 @@ class ParentViewModel @Inject constructor(
     }
 
     fun closeReport() = _state.update {
-        it.copy(reportDeviceId = null, overview = null, trend = null, ranking = null, sessions = emptyList(), blocks = emptyList())
+        it.copy(
+            reportDeviceId = null, overview = null, trend = null, ranking = null,
+            sessions = emptyList(), blocks = emptyList(),
+            reportFrom = null, reportTo = null, reportSelectedDay = null,
+        )
     }
 
     fun setReportDays(days: Int) {
         val deviceId = _state.value.reportDeviceId ?: return
-        _state.update { it.copy(reportDays = days) }
+        _state.update { it.copy(reportDays = days, reportFrom = null, reportTo = null, reportSelectedDay = null) }
         loadReport(deviceId, days)
+    }
+
+    /** 自定义日期范围：覆盖「近 N 天」口径，趋势/排行/明细/拦截全部按范围拉取 */
+    fun setReportCustomRange(from: String, to: String) {
+        val deviceId = _state.value.reportDeviceId ?: return
+        if (from > to) return
+        _state.update { it.copy(reportFrom = from, reportTo = to, reportSelectedDay = null) }
+        loadReport(deviceId)
+    }
+
+    /** 回到「近 N 天」口径 */
+    fun clearReportCustomRange() {
+        val deviceId = _state.value.reportDeviceId ?: return
+        _state.update { it.copy(reportFrom = null, reportTo = null, reportSelectedDay = null) }
+        loadReport(deviceId, _state.value.reportDays)
+    }
+
+    /** 点击趋势图柱子：时间线与拦截记录切换到该日（服务端按日拉取，不受 100 条上限影响） */
+    fun selectReportDay(dayKey: String) {
+        val deviceId = _state.value.reportDeviceId ?: return
+        val session = _state.value.session ?: return
+        if (_state.value.reportSelectedDay == dayKey) {
+            // 再点同一根柱子 = 取消筛选
+            _state.update { it.copy(reportSelectedDay = null) }
+            refreshReportDetails(deviceId, session)
+            return
+        }
+        _state.update { it.copy(reportSelectedDay = dayKey, reportBusy = true) }
+        viewModelScope.launch {
+            runCatching {
+                ReportDetails(
+                    sessions = api.usageSessions(bearer(session.token), deviceId, date = dayKey, limit = 200).sessions,
+                    blocks = api.blockLogs(bearer(session.token), deviceId, limit = 100, date = dayKey).blocks,
+                )
+            }
+                .onSuccess { data ->
+                    _state.update {
+                        it.copy(reportBusy = false, sessions = data.sessions, blocks = data.blocks)
+                    }
+                }
+                .onFailure { e -> _state.update { it.copy(reportBusy = false, error = friendly(e)) } }
+        }
+    }
+
+    /** 取消按日筛选，明细回到当前范围（自定义范围或最近） */
+    fun clearReportDay() {
+        val deviceId = _state.value.reportDeviceId ?: return
+        val session = _state.value.session ?: return
+        _state.update { it.copy(reportSelectedDay = null) }
+        refreshReportDetails(deviceId, session)
+    }
+
+    /** 只刷新明细两件套（时间线 + 拦截记录），趋势/排行不动 */
+    private fun refreshReportDetails(deviceId: Long, session: com.zzl.guardian.data.ParentSession) {
+        val from = _state.value.reportFrom
+        val to = _state.value.reportTo
+        viewModelScope.launch {
+            _state.update { it.copy(reportBusy = true) }
+            runCatching {
+                ReportDetails(
+                    sessions = if (from != null && to != null) {
+                        api.usageSessions(bearer(session.token), deviceId, limit = 200, from = from, to = to).sessions
+                    } else {
+                        api.usageSessions(bearer(session.token), deviceId, null, 100).sessions
+                    },
+                    blocks = if (from != null && to != null) {
+                        api.blockLogs(bearer(session.token), deviceId, limit = 100, from = from, to = to).blocks
+                    } else {
+                        api.blockLogs(bearer(session.token), deviceId, 50).blocks
+                    },
+                )
+            }
+                .onSuccess { data ->
+                    _state.update { it.copy(reportBusy = false, sessions = data.sessions, blocks = data.blocks) }
+                }
+                .onFailure { e -> _state.update { it.copy(reportBusy = false, error = friendly(e)) } }
+        }
     }
 
     /**
@@ -790,15 +879,34 @@ class ParentViewModel @Inject constructor(
      */
     fun loadReport(deviceId: Long, days: Int = _state.value.reportDays) {
         val session = _state.value.session ?: return
+        val from = _state.value.reportFrom
+        val to = _state.value.reportTo
+        val hasRange = from != null && to != null
         viewModelScope.launch {
             _state.update { it.copy(reportBusy = true) }
             runCatching {
                 ReportData(
                     overview = api.usageOverview(bearer(session.token), deviceId, null),
-                    trend = api.usageTrend(bearer(session.token), deviceId, days),
-                    ranking = api.usageRanking(bearer(session.token), deviceId, days),
-                    sessions = api.usageSessions(bearer(session.token), deviceId, null, 100).sessions,
-                    blocks = api.blockLogs(bearer(session.token), deviceId, 50).blocks,
+                    trend = if (hasRange) {
+                        api.usageTrend(bearer(session.token), deviceId, from = from, to = to)
+                    } else {
+                        api.usageTrend(bearer(session.token), deviceId, days)
+                    },
+                    ranking = if (hasRange) {
+                        api.usageRanking(bearer(session.token), deviceId, from = from, to = to)
+                    } else {
+                        api.usageRanking(bearer(session.token), deviceId, days)
+                    },
+                    sessions = if (hasRange) {
+                        api.usageSessions(bearer(session.token), deviceId, limit = 200, from = from, to = to).sessions
+                    } else {
+                        api.usageSessions(bearer(session.token), deviceId, null, 100).sessions
+                    },
+                    blocks = if (hasRange) {
+                        api.blockLogs(bearer(session.token), deviceId, limit = 100, from = from, to = to).blocks
+                    } else {
+                        api.blockLogs(bearer(session.token), deviceId, 50).blocks
+                    },
                 )
             }
                 .onSuccess { data ->
@@ -821,6 +929,12 @@ class ParentViewModel @Inject constructor(
         val overview: UsageOverviewDto,
         val trend: UsageTrendDto,
         val ranking: UsageRankingDto,
+        val sessions: List<SessionDetailDto>,
+        val blocks: List<BlockLogDto>,
+    )
+
+    /** 明细两件套：按日筛选/取消筛选时只刷新这两项 */
+    private data class ReportDetails(
         val sessions: List<SessionDetailDto>,
         val blocks: List<BlockLogDto>,
     )

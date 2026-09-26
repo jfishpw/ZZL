@@ -1,6 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.zzl.guardian.parent
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,18 +19,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zzl.guardian.data.api.BlockLogDto
@@ -39,6 +51,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * 使用报告。
@@ -62,10 +75,20 @@ internal fun UsageReportDialog(
     sessions: List<SessionDetailDto>,
     blocks: List<BlockLogDto>,
     busy: Boolean,
+    selectedDay: String?,
+    rangeFrom: String?,
+    rangeTo: String?,
     onDaysChange: (Int) -> Unit,
+    onCustomRange: (String, String) -> Unit,
+    onClearRange: () -> Unit,
+    onSelectDay: (String) -> Unit,
+    onClearDay: () -> Unit,
     onRefresh: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // 自定义范围的日期选择器：null = 关闭；FROM/TO = 正在选哪一端
+    var rangePickerTarget by remember { mutableStateOf<RangePickerTarget?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("使用报告 · $deviceName") },
@@ -86,18 +109,62 @@ internal fun UsageReportDialog(
                     TodayOverviewCard(overview)
 
                     Spacer(Modifier.height(16.dp))
-                    SectionHeader("近 $days 天趋势")
+                    val customRange = rangeFrom != null && rangeTo != null
+                    SectionHeader(
+                        if (customRange) "${shortDay(rangeFrom)} ~ ${shortDay(rangeTo)} 趋势" else "近 $days 天趋势",
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(7, 14, 30).forEach { option ->
                             FilterChip(
-                                selected = days == option,
+                                selected = !customRange && days == option,
                                 onClick = { onDaysChange(option) },
                                 label = { Text("$option 天") },
                             )
                         }
+                        // 自定义范围：选中后展开日期选择行
+                        FilterChip(
+                            selected = customRange,
+                            onClick = { if (customRange) onClearRange() else rangePickerTarget = RangePickerTarget.FROM },
+                            label = { Text("自定义") },
+                        )
                     }
+
+                    if (customRange) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(onClick = { rangePickerTarget = RangePickerTarget.FROM }) {
+                                Text(shortDay(rangeFrom))
+                            }
+                            Text("~", style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { rangePickerTarget = RangePickerTarget.TO }) {
+                                Text(shortDay(rangeTo))
+                            }
+                            TextButton(onClick = onClearRange) { Text("重置") }
+                        }
+                    }
+
                     Spacer(Modifier.height(8.dp))
-                    trend?.let { TrendChart(it) }
+                    trend?.let {
+                        TrendChart(
+                            trend = it,
+                            selectedDay = selectedDay,
+                            onSelectDay = onSelectDay,
+                        )
+                    }
+
+                    // 按日筛选横幅：点柱子后生效，再点同一根柱子或点横幅取消
+                    if (selectedDay != null) {
+                        Spacer(Modifier.height(6.dp))
+                        val dayTotal = trend?.points?.firstOrNull { it.dayKey == selectedDay }?.totalMs ?: 0L
+                        FilterChip(
+                            selected = true,
+                            onClick = onClearDay,
+                            label = { Text("只看 ${shortDay(selectedDay)} · 共 ${formatMinutes(dayTotal)}（点击取消）") },
+                        )
+                    }
 
                     Spacer(Modifier.height(16.dp))
                     SectionHeader("应用使用排行")
@@ -109,7 +176,7 @@ internal fun UsageReportDialog(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    SectionHeader("被拦截记录")
+                    SectionHeader(if (selectedDay != null) "${shortDay(selectedDay)} 被拦截记录" else "被拦截记录")
                     if (blocks.isEmpty()) {
                         EmptyHint("没有被拦截的记录，管控暂时没有触发")
                     } else {
@@ -117,7 +184,7 @@ internal fun UsageReportDialog(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    SectionHeader("最近使用时间线")
+                    SectionHeader(if (selectedDay != null) "${shortDay(selectedDay)} 使用明细" else "最近使用时间线")
                     if (sessions.isEmpty()) {
                         EmptyHint("暂无会话明细")
                     } else {
@@ -133,6 +200,58 @@ internal fun UsageReportDialog(
             TextButton(onClick = onDismiss) { Text("关闭") }
         },
     )
+
+    // 自定义范围的日期选择弹窗（与报告对话框平级，选一端关一次）
+    rangePickerTarget?.let { target ->
+        DatePickerDialog(
+            onDismissRequest = { rangePickerTarget = null },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { rangePickerTarget = null }) { Text("取消") }
+            },
+        ) {
+            val initialMillis = when (target) {
+                RangePickerTarget.FROM -> rangeFrom?.let(::dayKeyToUtcMillis)
+                RangePickerTarget.TO -> rangeTo?.let(::dayKeyToUtcMillis)
+                null -> null
+            } ?: System.currentTimeMillis()
+            val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+            DatePicker(
+                state = pickerState,
+                title = {
+                    Text(
+                        if (target == RangePickerTarget.FROM) "选择开始日期" else "选择结束日期",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
+                },
+                showModeToggle = false,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    onClick = {
+                        val millis = pickerState.selectedDateMillis ?: return@TextButton
+                        val picked = utcMillisToDayKey(millis)
+                        when (target) {
+                            RangePickerTarget.FROM -> {
+                                // 开始晚于已有结束：把结束跟着抬过来，保证 from<=to
+                                val to = rangeTo ?: picked
+                                onCustomRange(picked, if (picked > to) picked else to)
+                            }
+                            RangePickerTarget.TO -> {
+                                val from = rangeFrom ?: picked
+                                onCustomRange(if (picked < from) picked else from, picked)
+                            }
+                            null -> Unit
+                        }
+                        rangePickerTarget = null
+                    },
+                ) { Text("确定") }
+            }
+        }
+    }
 }
 
 @Composable
@@ -229,9 +348,16 @@ private fun TodayOverviewCard(overview: UsageOverviewDto) {
  *
  * 每根柱子上叠一条虚线标出当日额度 —— 只看绝对时长无法判断"是否失控"，
  * 必须和额度对照才有意义。
+ *
+ * 支持点击柱子按日筛选下方明细：pointerInput 里把点击横坐标换算成柱子序号。
+ * 再点同一根柱子由上层取消筛选（selectReportDay 内处理）。
  */
 @Composable
-private fun TrendChart(trend: UsageTrendDto) {
+private fun TrendChart(
+    trend: UsageTrendDto,
+    selectedDay: String? = null,
+    onSelectDay: (String) -> Unit = {},
+) {
     val points = trend.points
     if (points.isEmpty()) {
         EmptyHint("暂无趋势数据")
@@ -239,6 +365,7 @@ private fun TrendChart(trend: UsageTrendDto) {
     }
 
     val barColor = MaterialTheme.colorScheme.primary
+    val dimColor = barColor.copy(alpha = 0.32f)
     val limitColor = MaterialTheme.colorScheme.outlineVariant
     val maxValue = maxOf(
         points.maxOfOrNull { it.totalMs } ?: 0L,
@@ -247,7 +374,7 @@ private fun TrendChart(trend: UsageTrendDto) {
     )
 
     Text(
-        text = "共 ${formatMinutes(trend.totalMs)} · 日均 ${formatMinutes(trend.averageMs)}",
+        text = "共 ${formatMinutes(trend.totalMs)} · 日均 ${formatMinutes(trend.averageMs)} · 点击柱子可按日筛选",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -256,7 +383,14 @@ private fun TrendChart(trend: UsageTrendDto) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(120.dp)
+            .pointerInput(points) {
+                detectTapGestures { offset ->
+                    val slot = size.width.toFloat() / points.size
+                    val index = (offset.x / slot).toInt().coerceIn(0, points.size - 1)
+                    onSelectDay(points[index].dayKey)
+                }
+            },
     ) {
         val count = points.size
         val slot = size.width / count
@@ -264,6 +398,7 @@ private fun TrendChart(trend: UsageTrendDto) {
 
         points.forEachIndexed { index, point ->
             val left = slot * index + (slot - barWidth) / 2f
+            val isSelected = point.dayKey == selectedDay
 
             // 额度参考线
             if (point.limitMs > 0) {
@@ -276,11 +411,11 @@ private fun TrendChart(trend: UsageTrendDto) {
                 )
             }
 
-            // 实际使用柱
+            // 实际使用柱：选中日高亮，其余淡化
             val barHeight = (point.totalMs.toFloat() / maxValue) * size.height
             if (barHeight > 0f) {
                 drawRect(
-                    color = barColor,
+                    color = if (selectedDay == null || isSelected) barColor else dimColor,
                     topLeft = Offset(left, size.height - barHeight),
                     size = Size(barWidth, barHeight),
                 )
@@ -400,6 +535,34 @@ internal fun dayLabel(timestamp: Long): String {
     val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
     return String.format(Locale.US, "%02d-%02d", calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH))
 }
+
+/* ---------------- 日期范围（自定义筛选） ---------------- */
+
+/** dayKey 的短显示："2026-09-26" → "09-26" */
+internal fun shortDay(dayKey: String?): String = dayKey?.takeLast(5) ?: ""
+
+/**
+ * dayKey → DatePicker 期望的毫秒值。
+ * Material3 DatePicker 内部按 UTC 零点对齐，必须用 UTC 换算，
+ * 用本地时区会出现差一天的初始选中。
+ */
+internal fun dayKeyToUtcMillis(dayKey: String): Long = runCatching {
+    val parts = dayKey.split('-').map { it.toInt() }
+    Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(parts[0], parts[1] - 1, parts[2], 0, 0, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}.getOrDefault(System.currentTimeMillis())
+
+/** DatePicker 的毫秒值 → dayKey（同样按 UTC 解，与上面成对） */
+internal fun utcMillisToDayKey(millis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }.format(Date(millis))
+
+/** 自定义范围选择器正在选哪一端 */
+private enum class RangePickerTarget { FROM, TO }
 
 @Suppress("unused")
 private val unusedColor: Color = Color.Unspecified

@@ -190,6 +190,26 @@ fun AppControlDialog(
                 HorizontalDivider()
                 Spacer(Modifier.height(4.dp))
 
+                // 应用搜索：按名称或包名过滤，输入为空时显示全部（保持原行为）
+                var appSearch by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = appSearch,
+                    onValueChange = { appSearch = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("搜索应用") },
+                    placeholder = { Text("应用名或包名") },
+                )
+                val visibleApps = if (appSearch.isBlank()) {
+                    installedApps
+                } else {
+                    val q = appSearch.trim()
+                    installedApps.filter {
+                        it.appLabel?.contains(q, ignoreCase = true) == true ||
+                            it.packageName.contains(q, ignoreCase = true)
+                    }
+                }
+
                 if (installedApps.isEmpty()) {
                     Text(
                         "暂无应用清单。设备需在线并已完成一次同步后才会上报。",
@@ -200,8 +220,18 @@ fun AppControlDialog(
                     return@Column
                 }
 
+                if (visibleApps.isEmpty()) {
+                    Text(
+                        "没有匹配「$appSearch」的应用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                    return@Column
+                }
+
                 LazyColumn(Modifier.weight(1f)) {
-                    items(installedApps, key = { it.packageName }) { app ->
+                    items(visibleApps, key = { it.packageName }) { app ->
                         AppRuleRow(
                             app = app,
                             inList = app.packageName in listed,

@@ -284,37 +284,46 @@ interface ApiService {
         @Query("date") date: String? = null,
     ): UsageOverviewDto
 
-    /** 控制端：近 N 日趋势 */
+    /** 控制端：近 N 日趋势（或 from/to 自定义日期范围，二者都传时范围优先） */
     @GET("api/devices/{id}/usage/trend")
     suspend fun usageTrend(
         @Header("Authorization") authorization: String,
         @Path("id") deviceId: Long,
         @Query("days") days: Int = 7,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
     ): UsageTrendDto
 
-    /** 控制端：近 N 日应用使用排行 */
+    /** 控制端：近 N 日应用使用排行（或 from/to 自定义日期范围） */
     @GET("api/devices/{id}/usage/ranking")
     suspend fun usageRanking(
         @Header("Authorization") authorization: String,
         @Path("id") deviceId: Long,
         @Query("days") days: Int = 7,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
     ): UsageRankingDto
 
-    /** 控制端：会话时间线 */
+    /** 控制端：会话时间线（date=单日；from/to=范围；都不传=最近） */
     @GET("api/devices/{id}/usage/sessions")
     suspend fun usageSessions(
         @Header("Authorization") authorization: String,
         @Path("id") deviceId: Long,
         @Query("date") date: String? = null,
         @Query("limit") limit: Int = 200,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
     ): SessionListResponse
 
-    /** 控制端：拦截记录 */
+    /** 控制端：拦截记录（date/from/to 可选，用于按日或范围筛选） */
     @GET("api/devices/{id}/blocks")
     suspend fun blockLogs(
         @Header("Authorization") authorization: String,
         @Path("id") deviceId: Long,
         @Query("limit") limit: Int = 100,
+        @Query("date") date: String? = null,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
     ): BlockLogsResponse
 
     /** 被控端：批量上报拦截记录（按 clientKey 幂等去重） */
