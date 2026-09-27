@@ -38,6 +38,7 @@ interface GuardEntryPoint {
     fun keepaliveStore(): KeepaliveStore
     fun screenshotCapturer(): ScreenshotCapturer
     fun iconController(): IconController
+    fun privateDnsController(): com.zzl.guardian.child.dns.PrivateDnsController
     fun settingsStore(): SettingsStore
     fun wsClient(): WsClient
     fun apiService(): ApiService

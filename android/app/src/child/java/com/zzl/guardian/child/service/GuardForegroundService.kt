@@ -35,6 +35,8 @@ import com.zzl.guardian.child.keepalive.GuardKeepaliveWorker
 import com.zzl.guardian.child.keepalive.KeepaliveManager
 import com.zzl.guardian.child.keepalive.KeepaliveStore
 import com.zzl.guardian.child.data.DayKeys
+import com.zzl.guardian.child.dns.PrivateDnsController
+import com.zzl.guardian.child.dns.PrivateDnsPolicy
 import com.zzl.guardian.child.engine.BlockReason
 import com.zzl.guardian.child.engine.PinEntrySource
 import com.zzl.guardian.child.pin.PinStore
@@ -96,6 +98,7 @@ class GuardForegroundService : Service() {
     private lateinit var pinStore: PinStore
     private lateinit var keepaliveStore: KeepaliveStore
     private lateinit var iconController: IconController
+    private lateinit var privateDnsController: PrivateDnsController
     private lateinit var capturer: ScreenshotCapturer
 
     private var session: ChildSession? = null
@@ -145,6 +148,7 @@ class GuardForegroundService : Service() {
         pinStore = graph.pinStore()
         keepaliveStore = graph.keepaliveStore()
         iconController = graph.iconController()
+        privateDnsController = graph.privateDnsController()
         capturer = graph.screenshotCapturer()
 
         // 拦截页上的「申请加时」按钮交给引擎触发，引擎自己不碰网络 ——
@@ -277,6 +281,10 @@ class GuardForegroundService : Service() {
                 runCatching { detectPermissionLoss(PermissionChecker.snapshot(this@GuardForegroundService)) }
                     .onFailure { Log.d(TAG, "本地健康巡检失败: ${it.message}") }
 
+                // DNS 防护巡检（含故障自愈，见 PrivateDnsPolicy）：同样本地先行
+                runCatching { dnsCheckup() }
+                    .onFailure { Log.d(TAG, "DNS 防护巡检失败: ${it.message}") }
+
                 runCatching { sendHeartbeat(current) }
                     .onFailure { Log.d(TAG, "心跳失败（离线属正常）: ${it.message}") }
 
@@ -365,6 +373,7 @@ class GuardForegroundService : Service() {
                         adminMode = mode,
                         deviceOwner = isOwner,
                         uninstallBlocked = AdminModeManager.isUninstallBlocked(this),
+                        privateDnsActive = privateDnsController.statusText(),
                     ),
                     keepalive = keepalive,
                 ),
@@ -466,10 +475,18 @@ class GuardForegroundService : Service() {
                 runCatching { applyIconState(state.iconHidden) }
                     .onFailure { Log.w(TAG, "应用图标状态失败", it) }
 
+                // DNS 防护与图标隐藏同一套状态对账机制。
+                // 立即执行一次巡检（新的期望值当场生效），探测则由本轮巡检异步发起。
+                runCatching {
+                    privateDnsController.setExpected(state.privateDnsHost)
+                    dnsCheckup()
+                }.onFailure { Log.w(TAG, "应用 DNS 防护状态失败", it) }
+
                 Log.d(
                     TAG,
                     "状态对账完成 v${state.stateVersion}（锁定=${state.locked}，授权 ${state.grants.size} 条，" +
-                        "密码 v${state.pins?.version ?: 0}，图标隐藏=${state.iconHidden}）",
+                        "密码 v${state.pins?.version ?: 0}，图标隐藏=${state.iconHidden}，" +
+                        "DNS 防护=${state.privateDnsHost ?: "关"}）",
                 )
             }
             .onFailure { Log.d(TAG, "状态对账失败，继续使用本地副本: ${it.message}") }
@@ -488,6 +505,109 @@ class GuardForegroundService : Service() {
 
         Log.i(TAG, "图标状态需调整：$current → $shouldHide")
         if (shouldHide) iconController.hide() else iconController.show()
+    }
+
+    /* ---------------- DNS 防护巡检与故障自愈 ---------------- */
+
+    /** 缺 ADB 授权的提示只发一次，避免审计被刷屏 */
+    @Volatile
+    private var dnsGrantHintShown = false
+
+    /**
+     * DNS 防护巡检：按 [PrivateDnsPolicy] 的判定树处置。
+     *
+     * 探测（853 端口 + 金丝雀解析）是异步的，本轮决策用的是上一轮的探测结果，
+     * 决策完立刻为下一轮发起新探测 —— 巡检线程绝不阻塞在网络上。
+     */
+    private fun dnsCheckup() {
+        if (!privateDnsController.supported()) return
+
+        if (!privateDnsController.canControl()) {
+            // 缺 WRITE_SECURE_SETTINGS：家长还没做一次 ADB 授权。只提示一次。
+            if (!dnsGrantHintShown) {
+                dnsGrantHintShown = true
+                recordDnsAudit(
+                    AuditAction.DNS_NEEDS_GRANT,
+                    "设备缺少 WRITE_SECURE_SETTINGS 授权，DNS 防护未生效；" +
+                        "请在权限引导页按提示执行一次 ADB 授权命令",
+                    AuditLevel.WARN,
+                )
+            }
+            return
+        }
+
+        val expected = privateDnsController.expected()
+
+        // 家长已停用防护：清掉 fail-open 标记与设备残留
+        if (expected == null) {
+            if (privateDnsController.isFailOpen) privateDnsController.setFailOpen(false)
+            val current = privateDnsController.current()
+            if (current != null) {
+                privateDnsController.apply(null)
+                recordDnsAudit(AuditAction.DNS_WRITEBACK, "家长已停用 DNS 防护，清除设备上的私人 DNS：$current")
+            }
+            return
+        }
+
+        val decision = PrivateDnsPolicy.decide(
+            PrivateDnsPolicy.Inputs(
+                expected = expected,
+                current = privateDnsController.current(),
+                canaryFailures = privateDnsController.canaryFailures,
+                dotReachable = privateDnsController.lastDotReachable,
+                networkUp = privateDnsController.networkUp(),
+                failOpen = privateDnsController.isFailOpen,
+            ),
+        )
+
+        when (decision) {
+            PrivateDnsPolicy.Action.WRITE -> {
+                val wasFailOpen = privateDnsController.isFailOpen
+                val ok = privateDnsController.apply(expected)
+                if (wasFailOpen) {
+                    recordDnsAudit(
+                        AuditAction.DNS_RESTORED,
+                        "过滤服务已恢复，自动重新启用私人 DNS：$expected（${if (ok) "成功" else "失败"}）",
+                    )
+                    updateNotification()
+                } else {
+                    recordDnsAudit(
+                        AuditAction.DNS_WRITEBACK,
+                        "私人 DNS 被改动，已写回：$expected（${if (ok) "成功" else "失败"}）",
+                        AuditLevel.WARN,
+                    )
+                }
+            }
+
+            PrivateDnsPolicy.Action.FAIL_OPEN -> {
+                // 故障自愈：过滤服务确实挂了，临时恢复默认解析保住设备上网，
+                // 之后每轮探测 853 端口，恢复即自动重新启用
+                privateDnsController.apply(null)
+                privateDnsController.setFailOpen(true)
+                recordDnsAudit(
+                    AuditAction.DNS_FAIL_OPEN,
+                    "过滤服务不可达（解析连续失败且 853 端口不通），已临时恢复默认解析；" +
+                        "服务恢复后将自动重新启用 DNS 防护",
+                    AuditLevel.WARN,
+                )
+                updateNotification()
+            }
+
+            PrivateDnsPolicy.Action.KEEP, PrivateDnsPolicy.Action.NONE -> {}
+        }
+
+        // 为下一轮判定发起新探测
+        privateDnsController.startProbes(expected)
+    }
+
+    private fun recordDnsAudit(action: String, detail: String, level: String = AuditLevel.INFO) {
+        // recordAudit 是挂起函数（Room 落库），巡检线程里用服务协程异步写
+        scope.launch {
+            runCatching {
+                usageRepository.recordAudit(action = action, detail = detail, level = level)
+            }.onFailure { Log.w(TAG, "记录 DNS 审计事件失败", it) }
+        }
+        Log.i(TAG, "DNS 防护：$detail")
     }
 
     /** 整份上报已安装应用清单。服务每次启动上报一次，加上服务端主动请求。 */
@@ -718,6 +838,11 @@ class GuardForegroundService : Service() {
         deviceStateRepository.clear()
         policyRepository.clear()
         pinStore.clearAll()
+
+        // 私人 DNS 恢复默认解析：退出管控后 AGH 未必还在服务，
+        // 留着它会让设备在未来某次 AGH 宕机时莫名断网且无人处理
+        runCatching { privateDnsController.clearAll() }
+            .onFailure { Log.w(TAG, "清除私人 DNS 失败（不阻断退出流程）", it) }
 
         // 立刻撤掉遮罩：策略已清，别等引擎的下一次评估
         engine.clearBlockedState()
@@ -957,6 +1082,7 @@ class GuardForegroundService : Service() {
             // 关键权限被关时，常驻通知必须变成显眼的告警 ——
             // 这是孩子每次下滑通知栏都能看到的提醒，比只在控制端看审计更及时
             !PermissionChecker.snapshot(this).accessibility -> "⚠ 无障碍服务已关闭，管控已失效，请重新开启"
+            privateDnsController.isFailOpen -> "⚠ DNS 防护已临时降级（过滤服务不可达），恢复后自动启用"
             state.locked -> "设备已被家长锁定"
             state.unlocked -> "家长已临时解除限制"
             !state.enforcementEnabled -> "管控当前已暂停"

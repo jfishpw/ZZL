@@ -73,7 +73,7 @@ export function deviceState(deviceId) {
   // 而且不报任何错。历史上已经踩过一次。
   const device = one(
     `SELECT id, locked, locked_at, state_version, admin_mode, device_owner,
-            uninstall_blocked, icon_hidden
+            uninstall_blocked, icon_hidden, private_dns_host
        FROM devices WHERE id = ?`,
     Number(deviceId),
   );
@@ -112,6 +112,11 @@ export function deviceState(deviceId) {
      * 家长根本没机会再下发一次。
      */
     iconHidden: !!device.icon_hidden,
+    /**
+     * DNS 防护：家长期望设备使用的私人 DNS 主机名（null = 不启用）。
+     * 与图标隐藏同一套状态对账机制：持续状态、重启不丢、改了立即推送。
+     */
+    privateDnsHost: device.private_dns_host || null,
     stateVersion: device.state_version ?? 1,
     serverTime: now(),
   };
@@ -247,6 +252,22 @@ export function setIconHidden(deviceId, hidden, userId) {
     { delivered },
   );
   return { delivered };
+}
+
+/** 设置/清除设备的私人 DNS 主机名（DNS 防护开关） */
+export function setPrivateDns(deviceId, enabled, host, userId) {
+  const target = enabled && host ? String(host).trim() : '';
+  run('UPDATE devices SET private_dns_host = ? WHERE id = ?', target, Number(deviceId));
+  bumpStateVersion(deviceId);
+  const delivered = pushDeviceState(deviceId);
+
+  writeAudit(
+    userId,
+    Number(deviceId),
+    target ? 'device.private_dns_on' : 'device.private_dns_off',
+    { delivered, host: target || undefined },
+  );
+  return { delivered, host: target };
 }
 
 /** 把「已过期的授权」清出列表：不是删除数据，只是让历史与生效区分开 */

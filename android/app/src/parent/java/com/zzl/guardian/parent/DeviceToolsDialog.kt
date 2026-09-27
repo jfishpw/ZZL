@@ -50,6 +50,8 @@ internal fun DeviceToolsDialog(
     deviceName: String,
     deviceLocked: Boolean,
     iconHidden: Boolean,
+    privateDnsHost: String?,
+    privateDnsActive: String?,
     grants: List<GrantDto>,
     commands: List<CommandDto>,
     installedApps: List<InstalledAppDto>,
@@ -59,6 +61,7 @@ internal fun DeviceToolsDialog(
     onCreateGrant: (scope: String, packageName: String?, appLabel: String?, extraMinutes: Int?, ttlMinutes: Int?) -> Unit,
     onRevokeGrant: (Long) -> Unit,
     onToggleIcon: (hidden: Boolean) -> Unit,
+    onSetPrivateDns: (enabled: Boolean, host: String) -> Unit,
     onRefresh: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -191,6 +194,58 @@ internal fun DeviceToolsDialog(
                     enabled = !busy,
                 ) {
                     Text(if (iconHidden) "恢复桌面图标" else "隐藏桌面图标")
+                }
+
+                Spacer(Modifier.height(18.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(12.dp))
+
+                /* ---------- DNS 防护 ---------- */
+                SectionTitle("DNS 防护")
+                var dnsHost by remember { mutableStateOf(privateDnsHost ?: "") }
+                val dnsEnabled = privateDnsHost != null
+                Text(
+                    text = when {
+                        privateDnsActive == "fail-open" ->
+                            "⚠ 过滤服务暂时不可达，已自动恢复默认解析；服务恢复后会重新启用。"
+                        privateDnsActive == "unsupported" ->
+                            "此设备的安卓版本不支持私人 DNS（需要 Android 9+）。"
+                        dnsEnabled -> "已启用：所有上网流量先经过你的过滤服务（自建 AdGuard Home 或 NextDNS）。" +
+                            "设备会自动纠正改动，孩子关不掉。"
+                        else -> "把设备的私人 DNS 指向你的过滤服务，从网络层拦截黑名单网站。" +
+                            "需要先在被控端完成一次 ADB 授权（权限引导页有命令），并自建 AdGuard Home 或注册 NextDNS。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = dnsHost,
+                    onValueChange = { dnsHost = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("过滤服务主机名") },
+                    placeholder = { Text("例如 dns.example.com") },
+                    enabled = !busy,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onSetPrivateDns(true, dnsHost.trim()) },
+                        enabled = !busy && dnsHost.trim().length >= 3,
+                    ) { Text("启用防护") }
+                    OutlinedButton(
+                        onClick = { onSetPrivateDns(false, "") },
+                        enabled = !busy && dnsEnabled,
+                    ) { Text("关闭防护") }
+                }
+                if (privateDnsActive != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "设备当前状态：$privateDnsActive",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
 
                 Spacer(Modifier.height(18.dp))

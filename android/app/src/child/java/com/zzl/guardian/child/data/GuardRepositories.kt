@@ -659,6 +659,12 @@ object AuditAction {
     const val PIN_LOCKED = "pin.locked"
     const val SCREENSHOT_UPLOAD = "screenshot.upload"
 
+    // DNS 防护（故障自愈相关，见 PrivateDnsPolicy）
+    const val DNS_WRITEBACK = "dns.writeback"
+    const val DNS_FAIL_OPEN = "dns.fail_open"
+    const val DNS_RESTORED = "dns.restored"
+    const val DNS_NEEDS_GRANT = "dns.needs_grant"
+
     /**
      * 截屏**采集失败**（没有生成图片）。
      *

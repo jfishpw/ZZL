@@ -471,4 +471,14 @@ interface ApiService {
         @Path("id") deviceId: Long,
         @Body body: IconVisibilityRequest,
     ): IconVisibilityResponse
+
+    /* ---------------- DNS 防护 ---------------- */
+
+    /** 控制端：设置 / 清除被控端的私人 DNS 主机名 */
+    @POST("api/devices/{id}/private-dns")
+    suspend fun setPrivateDns(
+        @Header("Authorization") authorization: String,
+        @Path("id") deviceId: Long,
+        @Body body: PrivateDnsUpdateRequest,
+    ): PrivateDnsUpdateResponse
 }

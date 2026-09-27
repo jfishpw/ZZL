@@ -198,7 +198,7 @@ object AdminModeManager {
         val manager = dpm(context) ?: return
         if (!isDeviceOwner(context)) return
         val component = receiverComponent(context)
-        listOf("no_safe_boot", "no_debugging_features", RESTRICTION_ACCESSIBILITY_CONFIG)
+        listOf("no_safe_boot", "no_debugging_features", RESTRICTION_ACCESSIBILITY_CONFIG, "no_config_private_dns")
             .forEach { restriction ->
                 clearUserRestrictionSafely(manager, component, restriction)
             }

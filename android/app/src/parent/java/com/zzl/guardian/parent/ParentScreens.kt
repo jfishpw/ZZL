@@ -195,6 +195,8 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
             deviceName = state.toolsDevice?.name ?: "该设备",
             deviceLocked = state.toolsDevice?.locked == true,
             iconHidden = state.toolsDevice?.iconHidden == true,
+            privateDnsHost = state.toolsDevice?.privateDnsHost,
+            privateDnsActive = state.toolsDevice?.privateDnsActive,
             grants = state.grants,
             commands = state.commands,
             installedApps = state.installedApps,
@@ -213,6 +215,7 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
             },
             onRevokeGrant = { viewModel.revokeGrant(it, state.toolsDeviceId!!) },
             onToggleIcon = { hidden -> viewModel.setDeviceIcon(state.toolsDeviceId!!, hidden) },
+            onSetPrivateDns = { enabled, host -> viewModel.setPrivateDns(state.toolsDeviceId!!, enabled, host) },
             onRefresh = { viewModel.loadTools(state.toolsDeviceId!!) },
             onDismiss = viewModel::closeTools,
         )

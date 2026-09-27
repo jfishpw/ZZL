@@ -1,5 +1,5 @@
 import { ownedDevice, deviceFromToken } from './helpers.js';
-import { setLocked, setIconHidden } from '../grants.js';
+import { setLocked, setIconHidden, setPrivateDns } from '../grants.js';
 import {
   enqueueCommand,
   pendingCommands,
@@ -65,6 +65,34 @@ export default async function commandRoutes(fastify) {
     };
   });
 
+  /**
+   * 设置/清除被控端的私人 DNS（DNS 防护）。
+   *
+   * 与图标隐藏同一套状态对账机制：写 devices 表 + bumpStateVersion + 推送。
+   * host 必须是合法主机名（DoT 规范不允许 IP），长度上限 100。
+   */
+  fastify.post('/api/devices/:id/private-dns', { preHandler: fastify.requireParent }, async (request, reply) => {
+    const device = ownedDevice(request, reply);
+    if (!device) return;
+
+    const enabled = request.body?.enabled === true;
+    const host = typeof request.body?.host === 'string' ? request.body.host.trim() : '';
+    if (enabled && (!host || !/^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(host) || host.length > 100)) {
+      return reply.code(400).send({ error: 'invalid_host', message: '主机名只能是字母/数字/点/连字符，长度 1-100' });
+    }
+
+    const { delivered } = setPrivateDns(device.id, enabled, host, request.claims.userId);
+    return {
+      ok: true,
+      enabled,
+      host: enabled ? host : null,
+      delivered,
+      notice: enabled
+        ? 'DNS 防护已下发，设备将在对账时启用（约 1 分钟内）'
+        : 'DNS 防护已关闭，设备将恢复默认解析',
+    };
+  });
+
   /** 指令历史与状态（含已失效） */
   fastify.get('/api/devices/:id/commands', { preHandler: fastify.requireParent }, async (request, reply) => {
     const device = ownedDevice(request, reply);
@@ -90,6 +118,7 @@ export default async function commandRoutes(fastify) {
       serverTime: Date.now(),
       locked: !!device.locked,
       iconHidden: !!device.icon_hidden,
+      privateDnsHost: device.private_dns_host || null,
     };
   });
 

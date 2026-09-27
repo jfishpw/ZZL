@@ -90,6 +90,9 @@ function toDeviceView(device) {
     locked: !!device.locked,
     /** 桌面图标是否被隐藏。隐藏后家长只能靠暗码或这里恢复 */
     iconHidden: !!device.icon_hidden,
+    /** DNS 防护：配置值与设备上报的实际状态（供控制端展示） */
+    privateDnsHost: device.private_dns_host || null,
+    privateDnsActive: device.private_dns_active || null,
     createdAt: device.created_at,
   };
 }
@@ -181,7 +184,8 @@ export default async function deviceRoutes(fastify) {
               -- 加固状态由设备上报，因为只有设备自己能知道"当前是不是 Device Owner"
               admin_mode = COALESCE(?, admin_mode),
               device_owner = COALESCE(?, device_owner),
-              uninstall_blocked = COALESCE(?, uninstall_blocked)
+              uninstall_blocked = COALESCE(?, uninstall_blocked),
+              private_dns_active = COALESCE(?, private_dns_active)
         WHERE id = ?`,
       now(),
       foregroundPackage ?? null,
@@ -190,6 +194,7 @@ export default async function deviceRoutes(fastify) {
       hardening?.adminMode ?? null,
       hardening?.deviceOwner === undefined ? null : hardening.deviceOwner ? 1 : 0,
       hardening?.uninstallBlocked === undefined ? null : hardening.uninstallBlocked ? 1 : 0,
+      hardening?.privateDnsActive === undefined ? null : hardening.privateDnsActive ?? null,
       device.id,
     );
 
@@ -219,6 +224,7 @@ export default async function deviceRoutes(fastify) {
       allModes: ADMIN_MODE_CAPABILITIES,
       deviceOwner: !!device.device_owner,
       uninstallBlocked: !!device.uninstall_blocked,
+      privateDnsActive: device.private_dns_active || null,
       pinReady: !!device.pin_ready,
       keepalive: device.keepalive_json ? JSON.parse(device.keepalive_json) : null,
       /** 供控制端直接展示的一键激活命令，家长复制到电脑执行即可 */

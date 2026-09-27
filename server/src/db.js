@@ -345,6 +345,9 @@ function migrate() {
 
   // 图标隐藏状态（由控制端切换，被控端据本地副本执行）
   addColumnIfMissing('devices', 'icon_hidden', 'INTEGER NOT NULL DEFAULT 0');
+  // DNS 防护：家长期望的私人 DNS 主机名（空 = 不启用）与设备上报的实际状态
+  addColumnIfMissing('devices', 'private_dns_host', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('devices', 'private_dns_active', "TEXT");
 
   // client_key 由被控端生成，用于上报去重；SQLite 唯一索引视 NULL 为彼此不同，故历史行不受影响
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_client_key ON usage_sessions(client_key)');

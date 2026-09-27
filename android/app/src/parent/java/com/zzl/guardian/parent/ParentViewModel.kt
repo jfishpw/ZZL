@@ -32,6 +32,7 @@ import com.zzl.guardian.data.api.PolicyBundleDto
 import com.zzl.guardian.data.api.PolicyBundleUpdateRequest
 import com.zzl.guardian.data.api.PolicyListItemDto
 import com.zzl.guardian.data.api.PolicyUpdateRequest
+import com.zzl.guardian.data.api.PrivateDnsUpdateRequest
 import com.zzl.guardian.data.api.RegisterRequest
 import com.zzl.guardian.data.api.ScreenshotDto
 import com.zzl.guardian.data.api.SessionDetailDto
@@ -745,6 +746,37 @@ class ParentViewModel @Inject constructor(
                             toolsBusy = false,
                             notice = result.notice
                                 ?: if (hidden) "已隐藏桌面图标" else "已恢复桌面图标",
+                        )
+                    }
+                    refreshDevices()
+                }
+                .onFailure { e -> _state.update { it.copy(toolsBusy = false, error = friendly(e)) } }
+        }
+    }
+
+    /**
+     * 设置/清除被控端的私人 DNS（DNS 防护）。
+     *
+     * 与图标隐藏同一套模式：服务端持久化 + 状态对账下发，
+     * 被控端写入系统设置并有巡检自愈，孩子改不掉。
+     */
+    fun setPrivateDns(deviceId: Long, enabled: Boolean, host: String) {
+        val session = _state.value.session ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(toolsBusy = true, error = null, notice = null) }
+            runCatching {
+                api.setPrivateDns(
+                    authorization = bearer(session.token),
+                    deviceId = deviceId,
+                    body = PrivateDnsUpdateRequest(enabled = enabled, host = host),
+                )
+            }
+                .onSuccess { result ->
+                    _state.update {
+                        it.copy(
+                            toolsBusy = false,
+                            notice = result.notice
+                                ?: if (enabled) "DNS 防护已启用" else "DNS 防护已关闭",
                         )
                     }
                     refreshDevices()

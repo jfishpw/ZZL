@@ -96,6 +96,10 @@ data class DeviceView(
      * 家长会忘了自己藏过，然后因为"找不到这个 App"而困惑。
      */
     val iconHidden: Boolean = false,
+    /** DNS 防护：家长期望设备使用的私人 DNS 主机名（null = 未启用） */
+    val privateDnsHost: String? = null,
+    /** DNS 防护：设备上报的实际状态（off / fail-open / 主机名 / unsupported） */
+    val privateDnsActive: String? = null,
     val createdAt: Long = 0,
 )
 
@@ -395,6 +399,8 @@ data class DeviceStateDto(
      * 只靠指令的话，孩子重启一次平板图标就回来了。
      */
     val iconHidden: Boolean = false,
+    /** DNS 防护：家长期望设备使用的私人 DNS 主机名（null = 不启用） */
+    val privateDnsHost: String? = null,
     val stateVersion: Int = 1,
     val serverTime: Long = 0,
 )
@@ -835,4 +841,19 @@ data class HardeningReport(
     val adminMode: String,
     val deviceOwner: Boolean,
     val uninstallBlocked: Boolean,
+    /** 私人 DNS 实际状态（off / fail-open / 主机名 / unsupported），未上报时为 null */
+    val privateDnsActive: String? = null,
+)
+
+/** 控制端：设置/清除被控端私人 DNS（DNS 防护） */
+@Serializable
+data class PrivateDnsUpdateRequest(
+    val enabled: Boolean,
+    val host: String = "",
+)
+
+@Serializable
+data class PrivateDnsUpdateResponse(
+    val ok: Boolean = false,
+    val notice: String? = null,
 )
