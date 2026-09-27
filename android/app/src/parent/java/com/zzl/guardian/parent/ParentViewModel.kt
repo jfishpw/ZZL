@@ -102,6 +102,8 @@ class ParentViewModel @Inject constructor(
         val reportTo: String? = null,
         /** 趋势图上被点选的日期（dayKey）。非空时时间线与拦截记录只显示该日 */
         val reportSelectedDay: String? = null,
+        /** 按日筛选时的单应用汇总（点击柱子后展示在排行区） */
+        val dayAppUsage: com.zzl.guardian.data.api.DailyUsageDto? = null,
         val overview: UsageOverviewDto? = null,
         val trend: UsageTrendDto? = null,
         val ranking: UsageRankingDto? = null,
@@ -799,6 +801,7 @@ class ParentViewModel @Inject constructor(
                 reportFrom = null,
                 reportTo = null,
                 reportSelectedDay = null,
+                dayAppUsage = null,
                 // 与编辑类面板互斥
                 editingDeviceId = null,
                 policy = null,
@@ -817,13 +820,13 @@ class ParentViewModel @Inject constructor(
         it.copy(
             reportDeviceId = null, overview = null, trend = null, ranking = null,
             sessions = emptyList(), blocks = emptyList(),
-            reportFrom = null, reportTo = null, reportSelectedDay = null,
+            reportFrom = null, reportTo = null, reportSelectedDay = null, dayAppUsage = null,
         )
     }
 
     fun setReportDays(days: Int) {
         val deviceId = _state.value.reportDeviceId ?: return
-        _state.update { it.copy(reportDays = days, reportFrom = null, reportTo = null, reportSelectedDay = null) }
+        _state.update { it.copy(reportDays = days, reportFrom = null, reportTo = null, reportSelectedDay = null, dayAppUsage = null) }
         loadReport(deviceId, days)
     }
 
@@ -831,14 +834,14 @@ class ParentViewModel @Inject constructor(
     fun setReportCustomRange(from: String, to: String) {
         val deviceId = _state.value.reportDeviceId ?: return
         if (from > to) return
-        _state.update { it.copy(reportFrom = from, reportTo = to, reportSelectedDay = null) }
+        _state.update { it.copy(reportFrom = from, reportTo = to, reportSelectedDay = null, dayAppUsage = null) }
         loadReport(deviceId)
     }
 
     /** 回到「近 N 天」口径 */
     fun clearReportCustomRange() {
         val deviceId = _state.value.reportDeviceId ?: return
-        _state.update { it.copy(reportFrom = null, reportTo = null, reportSelectedDay = null) }
+        _state.update { it.copy(reportFrom = null, reportTo = null, reportSelectedDay = null, dayAppUsage = null) }
         loadReport(deviceId, _state.value.reportDays)
     }
 
@@ -858,11 +861,17 @@ class ParentViewModel @Inject constructor(
                 ReportDetails(
                     sessions = api.usageSessions(bearer(session.token), deviceId, date = dayKey, limit = 200).sessions,
                     blocks = api.blockLogs(bearer(session.token), deviceId, limit = 100, date = dayKey).blocks,
+                    dayAppUsage = api.usageDaily(bearer(session.token), deviceId, date = dayKey),
                 )
             }
                 .onSuccess { data ->
                     _state.update {
-                        it.copy(reportBusy = false, sessions = data.sessions, blocks = data.blocks)
+                        it.copy(
+                            reportBusy = false,
+                            sessions = data.sessions,
+                            blocks = data.blocks,
+                            dayAppUsage = data.dayAppUsage,
+                        )
                     }
                 }
                 .onFailure { e -> _state.update { it.copy(reportBusy = false, error = friendly(e)) } }
@@ -885,6 +894,7 @@ class ParentViewModel @Inject constructor(
             _state.update { it.copy(reportBusy = true) }
             runCatching {
                 ReportDetails(
+                    dayAppUsage = null,
                     sessions = if (from != null && to != null) {
                         api.usageSessions(bearer(session.token), deviceId, limit = 200, from = from, to = to).sessions
                     } else {
@@ -898,7 +908,14 @@ class ParentViewModel @Inject constructor(
                 )
             }
                 .onSuccess { data ->
-                    _state.update { it.copy(reportBusy = false, sessions = data.sessions, blocks = data.blocks) }
+                    _state.update {
+                        it.copy(
+                            reportBusy = false,
+                            sessions = data.sessions,
+                            blocks = data.blocks,
+                            dayAppUsage = data.dayAppUsage,
+                        )
+                    }
                 }
                 .onFailure { e -> _state.update { it.copy(reportBusy = false, error = friendly(e)) } }
         }
@@ -965,10 +982,11 @@ class ParentViewModel @Inject constructor(
         val blocks: List<BlockLogDto>,
     )
 
-    /** 明细两件套：按日筛选/取消筛选时只刷新这两项 */
+    /** 明细三件套：按日筛选/取消筛选时只刷新这些 */
     private data class ReportDetails(
         val sessions: List<SessionDetailDto>,
         val blocks: List<BlockLogDto>,
+        val dayAppUsage: com.zzl.guardian.data.api.DailyUsageDto? = null,
     )
 
     /* ---------------- 加时申请审批（M4） ---------------- */

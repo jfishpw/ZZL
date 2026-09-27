@@ -269,14 +269,19 @@ data class UsageReportResponse(
 @Serializable
 data class AppUsageDto(
     val packageName: String,
+    val appLabel: String? = null,
     val totalMs: Long = 0,
     val openCount: Int = 0,
+    /** 该应用当天是否不计入总时长 */
+    val exemptTotal: Boolean = false,
 )
 
 @Serializable
 data class DailyUsageDto(
     val date: String = "",
     val totalMs: Long = 0,
+    /** 不计入总时长的部分（被豁免应用），单独列出避免误读 */
+    val exemptMs: Long = 0,
     val apps: List<AppUsageDto> = emptyList(),
 )
 
@@ -857,3 +862,4 @@ data class PrivateDnsUpdateResponse(
     val ok: Boolean = false,
     val notice: String? = null,
 )
+

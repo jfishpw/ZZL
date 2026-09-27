@@ -234,6 +234,7 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
             selectedDay = state.reportSelectedDay,
             rangeFrom = state.reportFrom,
             rangeTo = state.reportTo,
+            dayAppUsage = state.dayAppUsage,
             onDaysChange = viewModel::setReportDays,
             onCustomRange = viewModel::setReportCustomRange,
             onClearRange = viewModel::clearReportCustomRange,

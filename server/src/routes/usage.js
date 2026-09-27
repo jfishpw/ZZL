@@ -272,9 +272,11 @@ export default async function usageRoutes(fastify) {
     );
 
     const exempt = exemptPackagesFor(appRulesFor(device.id), date);
+    const labels = labelMapFor(device.id);
 
     const apps = rows.map((r) => ({
       packageName: r.package_name,
+      appLabel: labels.get(r.package_name) ?? null,
       totalMs: r.total_ms,
       openCount: r.open_count,
       /** 该应用当天是否不计入总时长 */

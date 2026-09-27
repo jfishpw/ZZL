@@ -42,7 +42,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.zzl.guardian.data.api.AppRankingDto
 import com.zzl.guardian.data.api.BlockLogDto
+import com.zzl.guardian.data.api.DailyUsageDto
 import com.zzl.guardian.data.api.SessionDetailDto
 import com.zzl.guardian.data.api.UsageOverviewDto
 import com.zzl.guardian.data.api.UsageRankingDto
@@ -78,6 +80,7 @@ internal fun UsageReportDialog(
     selectedDay: String?,
     rangeFrom: String?,
     rangeTo: String?,
+    dayAppUsage: DailyUsageDto?,
     onDaysChange: (Int) -> Unit,
     onCustomRange: (String, String) -> Unit,
     onClearRange: () -> Unit,
@@ -167,12 +170,43 @@ internal fun UsageReportDialog(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    SectionHeader("应用使用排行")
-                    val apps = ranking?.apps.orEmpty()
-                    if (apps.isEmpty()) {
-                        EmptyHint("这段时间还没有使用记录")
+                    SectionHeader(if (selectedDay != null) "${shortDay(selectedDay)} 应用排行" else "应用使用排行")
+                    if (selectedDay != null) {
+                        // 按日筛选：显示该日的单应用用量（服务端按日汇总）
+                        val dayApps = dayAppUsage?.apps.orEmpty().sortedByDescending { it.totalMs }
+                        if (dayApps.isEmpty()) {
+                            EmptyHint("${shortDay(selectedDay)} 没有应用使用记录")
+                        } else {
+                            val maxMs = dayApps.maxOf { it.totalMs }.coerceAtLeast(1L)
+                            dayApps.take(8).forEach { app ->
+                                RankingRow(
+                                    AppRankingDto(
+                                        packageName = app.packageName,
+                                        appLabel = app.appLabel,
+                                        totalMs = app.totalMs,
+                                        openCount = app.openCount,
+                                        activeDays = 1,
+                                        dailyAverageMs = app.totalMs,
+                                    ),
+                                    maxMs,
+                                )
+                            }
+                            if ((dayAppUsage?.exemptMs ?: 0L) > 0L) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "另有 ${formatMinutes(dayAppUsage?.exemptMs ?: 0L)} 来自不计入总时长的应用",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     } else {
-                        apps.take(8).forEach { app -> RankingRow(app, apps.first().totalMs) }
+                        val apps = ranking?.apps.orEmpty()
+                        if (apps.isEmpty()) {
+                            EmptyHint("这段时间还没有使用记录")
+                        } else {
+                            apps.take(8).forEach { app -> RankingRow(app, apps.first().totalMs) }
+                        }
                     }
 
                     Spacer(Modifier.height(16.dp))
