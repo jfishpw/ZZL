@@ -222,7 +222,7 @@ internal fun UsageReportDialog(
                     if (sessions.isEmpty()) {
                         EmptyHint("暂无会话明细")
                     } else {
-                        sessions.take(12).forEach { session -> SessionRow(session) }
+                        sessions.take(30).forEach { session -> SessionRow(session) }
                     }
                 }
             }

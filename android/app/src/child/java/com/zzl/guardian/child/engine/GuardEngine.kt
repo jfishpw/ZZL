@@ -17,6 +17,7 @@ import com.zzl.guardian.child.data.GuardPolicy
 import com.zzl.guardian.child.data.PolicyRepository
 import com.zzl.guardian.child.data.PolicyRules
 import com.zzl.guardian.child.data.UsageRepository
+import java.util.UUID
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -223,6 +224,12 @@ class GuardEngine @Inject constructor(
     @Volatile
     var foregroundLookup: (() -> String?)? = null
 
+    /**
+     * 当前可见应用窗口集合（分屏/小窗并算计时）。null = 无障碍未提供，按普通模式跑。
+     * 与 [foregroundLookup] 同一注入模式。
+     */
+    var visiblePackagesLookup: (() -> Set<String>?)? = null
+
     /** 预警去重的额度日。跨天后清空 [warnedWarnKeys]，各类预警每天各提醒一次。 */
     private var warnDayKey: String? = null
 
@@ -392,6 +399,7 @@ class GuardEngine @Inject constructor(
     private suspend fun commitForegroundNow(finalPkg: String, eventAt: Long) {
         mutex.withLock {
             if (finalPkg == desiredPackage) return@withLock
+            parallelOpen.remove(finalPkg)
             desiredPackage = finalPkg
             // 会话结束时间取事件时间：新前台从事件那一刻就出现了
             closeOpenSession(eventAt)
@@ -413,6 +421,7 @@ class GuardEngine @Inject constructor(
         mutex.withLock {
             // 期间可能有更新的事件已提交（如孩子又切走了），不覆盖
             if (desiredPackage != expected) return@withLock
+            parallelOpen.remove(verified)
             desiredPackage = verified
             closeOpenSession(System.currentTimeMillis())
             usedCommittedMs = todayTotal()
@@ -456,6 +465,7 @@ class GuardEngine @Inject constructor(
         screenInteractive = interactive
         scope.launch {
             mutex.withLock {
+                closeAllParallel(at, record = true)
                 closeOpenSession(at)
                 usedCommittedMs = todayTotal()
                 // 亮屏时前台往往还是同一个应用，系统不会再发窗口切换事件。
@@ -829,6 +839,15 @@ class GuardEngine @Inject constructor(
                 usageRepository.refreshOpenDuration(at)
             }
 
+            // 分屏/小窗并行计时（recommended 模式）：非焦点但可见的应用各算各的
+            updateParallelSessions(at)
+
+            // 并行会话有收尾时刷新累计，让总额度判定把它们算进来
+            if (tickCount % 5 == 0 && parallelRecorded) {
+                usedCommittedMs = todayTotal()
+                parallelRecorded = false
+            }
+
             // 孩子可能一直停留在同一个应用里，此时没有任何前台切换事件，
             // 只能靠巡检发现「额度用尽」「时段结束」以及「家长刚批准了加时」
             applyDecision(openPackage ?: desiredPackage, at)
@@ -836,6 +855,73 @@ class GuardEngine @Inject constructor(
             publishState(at)
         }
     }
+
+    /* ---------------- 可见窗口并行计时（分屏 / 小窗） ---------------- */
+
+    /** 并行计时中各包名的起始时刻 */
+    private val parallelOpen = mutableMapOf<String, Long>()
+
+    /** 本轮是否有并行会话收尾（决定要不要刷新额度累计） */
+    @Volatile
+    private var parallelRecorded = false
+
+    /** 供服务层读取当前策略的计时方式 */
+    fun currentTimingMode(): String = guard?.policy?.timingMode ?: "standard"
+
+    /** 供服务层读取额度重置时间（系统对账的窗口起点用） */
+    fun currentResetHour(): Int = guard?.policy?.resetHour ?: 0
+
+    /**
+     * recommended 模式：每秒同步一次"可见但不聚焦"的应用集合。
+     *
+     * 设计约束（保证不破坏现有功能）：
+     *  - 焦点应用的计时**完全走原通道**（事件驱动会话），这里只处理集合差；
+     *  - 切到某应用时其并行条目直接丢弃不落库（焦点会话从事件时刻起算，避免双计）；
+     *  - 熄屏 / 被拦截 / 非 recommended 模式：全部收尾。
+     */
+    private suspend fun updateParallelSessions(at: Long) {
+        if (guard?.policy?.timingMode != "recommended" || !screenInteractive || _state.value.blocking) {
+            closeAllParallel(at, record = true)
+            return
+        }
+        val visible = visiblePackagesLookup?.invoke() ?: return
+        val focused = desiredPackage
+        val targets = visible.filter { it != focused && !isDesktopPackage(it) }
+
+        for (pkg in targets) {
+            if (pkg !in parallelOpen) parallelOpen[pkg] = at
+        }
+
+        val toClose = parallelOpen.keys - targets.toSet()
+        for (pkg in toClose) {
+            closeParallelEntry(pkg, at, record = true)
+        }
+    }
+
+    /** 熄屏 / 退出模式 / 被拦截时整体收尾 */
+    private suspend fun closeAllParallel(at: Long, record: Boolean) {
+        if (parallelOpen.isEmpty()) return
+        for (pkg in parallelOpen.keys.toList()) {
+            closeParallelEntry(pkg, at, record)
+        }
+    }
+
+    private suspend fun closeParallelEntry(pkg: String, at: Long, record: Boolean) {
+        val start = parallelOpen.remove(pkg) ?: return
+        if (!record || at - start < MIN_PARALLEL_SESSION_MS) return
+        usageRepository.recordClosedSession(
+            packageName = pkg,
+            dayKey = currentDayKey(),
+            startTs = start,
+            endTs = at,
+            clientKey = "parallel-${UUID.randomUUID()}",
+        )
+        parallelRecorded = true
+    }
+
+    /** 桌面不参与并行计时：小窗上课 + 桌面背景时，桌面不应被计为"在使用" */
+    private fun isDesktopPackage(pkg: String): Boolean =
+        pkg.contains("launcher", ignoreCase = true) || pkg.contains("desktop", ignoreCase = true)
 
     /** 强制重新计算（家长在界面上点了刷新时用） */
     suspend fun refreshUsage() {
@@ -996,6 +1082,9 @@ class GuardEngine @Inject constructor(
          * 这个时长；真正的应用切换只是让拦截与计时晚 3 秒生效，可以接受。
          */
         const val FOREGROUND_CONFIRM_MS = 3_000L
+
+        /** 并行会话最短时长：短于它视为窗口抖动，不落库 */
+        const val MIN_PARALLEL_SESSION_MS = 5_000L
 
         /** 锁定临门预警提前量 */
         const val WARN_BEFORE_LOCK_MS = 5 * 60_000L

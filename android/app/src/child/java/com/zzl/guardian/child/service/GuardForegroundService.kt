@@ -36,6 +36,7 @@ import com.zzl.guardian.child.keepalive.KeepaliveManager
 import com.zzl.guardian.child.keepalive.KeepaliveStore
 import com.zzl.guardian.child.data.DayKeys
 import com.zzl.guardian.child.dns.PrivateDnsController
+import com.zzl.guardian.child.timing.SystemUsageReconciler
 import com.zzl.guardian.child.dns.PrivateDnsPolicy
 import com.zzl.guardian.child.engine.BlockReason
 import com.zzl.guardian.child.engine.PinEntrySource
@@ -99,6 +100,7 @@ class GuardForegroundService : Service() {
     private lateinit var keepaliveStore: KeepaliveStore
     private lateinit var iconController: IconController
     private lateinit var privateDnsController: PrivateDnsController
+    private lateinit var systemUsageReconciler: SystemUsageReconciler
     private lateinit var capturer: ScreenshotCapturer
 
     private var session: ChildSession? = null
@@ -149,6 +151,7 @@ class GuardForegroundService : Service() {
         keepaliveStore = graph.keepaliveStore()
         iconController = graph.iconController()
         privateDnsController = graph.privateDnsController()
+        systemUsageReconciler = graph.systemUsageReconciler()
         capturer = graph.screenshotCapturer()
 
         // 拦截页上的「申请加时」按钮交给引擎触发，引擎自己不碰网络 ——
@@ -284,6 +287,13 @@ class GuardForegroundService : Service() {
                 // DNS 防护巡检（含故障自愈，见 PrivateDnsPolicy）：同样本地先行
                 runCatching { dnsCheckup() }
                     .onFailure { Log.d(TAG, "DNS 防护巡检失败: ${it.message}") }
+
+                // 系统用量对账：recommended 每 10 周期（5 分钟）、system 每 4 周期（2 分钟）
+                val timingMode = engine.currentTimingMode()
+                if (timingMode != "standard" && tickCount % (if (timingMode == "system") 4 else 10) == 0L) {
+                    runCatching { reconcileSystemUsage(timingMode) }
+                        .onFailure { Log.d(TAG, "系统用量对账失败: ${it.message}") }
+                }
 
                 runCatching { sendHeartbeat(current) }
                     .onFailure { Log.d(TAG, "心跳失败（离线属正常）: ${it.message}") }
@@ -608,6 +618,53 @@ class GuardForegroundService : Service() {
             }.onFailure { Log.w(TAG, "记录 DNS 审计事件失败", it) }
         }
         Log.i(TAG, "DNS 防护：$detail")
+    }
+
+    /* ---------------- 系统用量对账（分屏/小窗漏计的兜底） ---------------- */
+
+    /** 系统用量不可用的提示只发一次，避免审计刷屏 */
+    @Volatile
+    private var systemUsageHintShown = false
+
+    private fun reconcileSystemUsage(timingMode: String) {
+        val dayKey = com.zzl.guardian.child.data.DayKeys.of(
+            System.currentTimeMillis(),
+            engine.currentResetHour(),
+        )
+        scope.launch {
+            val result = systemUsageReconciler.reconcile(engine.currentResetHour(), dayKey)
+            if (!result.available) {
+                // 家长要求的语义：查询不到系统数据只提示，绝不影响正常管控
+                if (!systemUsageHintShown) {
+                    systemUsageHintShown = true
+                    scope.launch {
+                        runCatching {
+                            usageRepository.recordAudit(
+                                action = AuditAction.TIMING_SYSTEM_UNAVAILABLE,
+                                detail = "计时方式为 $timingMode，但系统使用情况数据不可用（未授予使用情况访问权）；" +
+                                    "已自动退回事件计时，管控不受影响",
+                                level = AuditLevel.WARN,
+                            )
+                        }.onFailure { Log.w(TAG, "记录对账不可用事件失败", it) }
+                    }
+                }
+                return@launch
+            }
+            systemUsageHintShown = false
+            if (result.correctedApps > 0) {
+                val detail = "系统口径高于事件计时：为 ${result.correctedApps} 个应用补记 " +
+                    "${result.correctedMs / 60_000} 分钟（分屏/小窗形态的漏计）"
+                runCatching {
+                    usageRepository.recordAudit(
+                        action = AuditAction.TIMING_RECONCILED,
+                        detail = detail,
+                        level = AuditLevel.INFO,
+                    )
+                }.onFailure { Log.w(TAG, "记录对账事件失败", it) }
+                Log.i(TAG, "系统用量对账：$detail")
+                engine.refreshUsage()
+            }
+        }
     }
 
     /** 整份上报已安装应用清单。服务每次启动上报一次，加上服务端主动请求。 */

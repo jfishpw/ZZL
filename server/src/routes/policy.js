@@ -26,6 +26,7 @@ export function toPolicyView(policy) {
     listMode: policy.list_mode,
     allowTimeRequest: !!policy.allow_time_request,
     enabled: !!policy.enabled,
+    timingMode: policy.timing_mode || 'standard',
     version: policy.version,
     updatedAt: policy.updated_at,
   };
@@ -228,6 +229,11 @@ export default async function policyRoutes(fastify) {
     const allowTimeRequest =
       body.allowTimeRequest === undefined ? current.allow_time_request : body.allowTimeRequest ? 1 : 0;
     const enabled = body.enabled === undefined ? current.enabled : body.enabled ? 1 : 0;
+    const TIMING_MODES = new Set(['standard', 'recommended', 'system']);
+    const timingModeRaw = body.timingMode === undefined ? current.timing_mode : String(body.timingMode);
+    if (!TIMING_MODES.has(timingModeRaw)) {
+      return reply.code(400).send({ error: 'invalid_timing_mode', message: '计时方式只能是 standard / recommended / system' });
+    }
 
     if (weekdayTotalMin === null || weekendTotalMin === null || resetHour === null) {
       return reply.code(400).send({
@@ -242,15 +248,15 @@ export default async function policyRoutes(fastify) {
     run(
       `UPDATE policies
           SET weekday_total_min = ?, weekend_total_min = ?, reset_hour = ?,
-              list_mode = ?, allow_time_request = ?, enabled = ?
+              list_mode = ?, allow_time_request = ?, enabled = ?, timing_mode = ?
         WHERE device_id = ?`,
       weekdayTotalMin, weekendTotalMin, resetHour,
-      listMode, allowTimeRequest, enabled,
+      listMode, allowTimeRequest, enabled, timingModeRaw,
       device.id,
     );
 
     const { bundle, delivered } = commitPolicyChange(device.id, request.claims.userId, 'policy.update', {
-      weekdayTotalMin, weekendTotalMin, resetHour, listMode, allowTimeRequest, enabled: !!enabled,
+      weekdayTotalMin, weekendTotalMin, resetHour, listMode, allowTimeRequest, enabled: !!enabled, timingMode: timingModeRaw,
     });
 
     return { ...bundle, delivered };

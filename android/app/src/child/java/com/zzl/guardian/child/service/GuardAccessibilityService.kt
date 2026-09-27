@@ -152,6 +152,8 @@ class GuardAccessibilityService : AccessibilityService() {
                 // 前台核实回调：引擎提交切换前用它确认「前台真的变了」，
                 // 防瞬态窗口（权限弹窗/侧边栏等）把计时会话切碎
                 engine.foregroundLookup = { currentForegroundPackage() }
+                // 可见窗口集合（分屏/小窗并算计时用）：null 表示服务拿不到（当普通模式跑）
+                engine.visiblePackagesLookup = { visibleAppPackages() }
                 engine.onForegroundChanged(currentForegroundPackage(), System.currentTimeMillis())
             }.onFailure { Log.w(TAG, "初始化管控引擎失败", it) }
         }
@@ -171,6 +173,28 @@ class GuardAccessibilityService : AccessibilityService() {
                 it != SYSTEM_UI_PACKAGE && it !in transientDialogPackages
         }
     }.getOrNull()
+
+    /**
+     * 当前所有"可见"的应用包名（分屏/小窗并算计时用）。
+     *
+     * 过滤规则与前台判定一致（排除自己、输入法、SystemUI、瞬态弹窗），
+     * 额外要求窗口 isVisibleToUser —— 分屏的另一侧、悬浮小窗都满足。
+     * 注意**不排除桌面 launcher**的判断交给引擎层做（那里知道焦点是谁），
+     * 这里如实上报，由引擎过滤掉焦点应用与桌面。
+     */
+    fun visibleAppPackages(): Set<String> = runCatching {
+        windows.asSequence()
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            // 可见性在节点上（WindowInfo 没有 isVisibleToUser）：
+            // 分屏另一侧、悬浮小窗的根节点都是"对用户可见"
+            .filter { it.root?.isVisibleToUser == true }
+            .mapNotNull { it.root?.packageName?.toString() }
+            .filter {
+                it != packageName && it !in imePackages &&
+                    it != SYSTEM_UI_PACKAGE && it !in transientDialogPackages
+            }
+            .toSet()
+    }.getOrDefault(emptySet())
 
     /* ---------------- 回桌面：三级兜底 ---------------- */
 

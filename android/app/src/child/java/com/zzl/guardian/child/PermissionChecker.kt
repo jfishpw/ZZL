@@ -111,6 +111,9 @@ object PermissionChecker {
         false
     }
 
+    /** 系统用量对账用：使用情况访问权是否已授予（公开入口，逻辑同上） */
+    fun hasUsageAccessPublic(context: Context): Boolean = hasUsageAccess(context)
+
     /** 悬浮窗（全屏遮盖拦截所需）是否已授予 */
     private fun canDrawOverlays(context: Context): Boolean = try {
         Settings.canDrawOverlays(context)

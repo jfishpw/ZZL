@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +30,7 @@ import javax.inject.Singleton
     // v7：app_limit_baseline 新增（逐应用限额的生效基线，实现「设 N 分钟 = 从现在起还能用 N 分钟」）。
     // 沿用破坏式迁移：本地库存的都是可从服务端重建的缓存与日志，
     // 为它维护迁移脚本的收益远低于脚本写错导致崩溃的风险。
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class GuardDatabase : RoomDatabase() {
@@ -61,6 +63,14 @@ object GuardDatabaseModule {
     @Singleton
     fun provideGuardDatabase(@ApplicationContext context: Context): GuardDatabase =
         Room.databaseBuilder(context, GuardDatabase::class.java, "zzl_guard.db")
+            // v7→v8：policy_cache 增加 timing_mode。
+            // 必须写正式迁移而不是依赖破坏式回退 —— 会话与限额基线也在这个库里，
+            // 升级清库会让当日额度凭空重置。
+            .addMigrations(object : Migration(7, 8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE policy_cache ADD COLUMN timing_mode TEXT NOT NULL DEFAULT 'standard'")
+                }
+            })
             .fallbackToDestructiveMigration()
             .build()
 

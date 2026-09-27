@@ -419,6 +419,7 @@ class ParentViewModel @Inject constructor(
         resetHour: Int,
         enabled: Boolean,
         allowTimeRequest: Boolean? = null,
+        timingMode: String? = null,
     ) {
         val session = _state.value.session ?: return
         if (weekdayTotalMin !in 0..1440 || weekendTotalMin !in 0..1440) {
@@ -442,6 +443,7 @@ class ParentViewModel @Inject constructor(
                         resetHour = resetHour,
                         enabled = enabled,
                         allowTimeRequest = allowTimeRequest,
+                        timingMode = timingMode,
                     ),
                 )
             }

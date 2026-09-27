@@ -34,6 +34,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -162,7 +163,7 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
             deviceName = state.editingDevice?.name ?: "该设备",
             policy = state.policy,
             busy = state.policyBusy,
-            onSave = { weekday, weekend, resetHour, enabled, allowTimeRequest ->
+            onSave = { weekday, weekend, resetHour, enabled, allowTimeRequest, timingMode ->
                 viewModel.savePolicy(
                     deviceId = state.editingDeviceId!!,
                     weekdayTotalMin = weekday,
@@ -170,6 +171,7 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
                     resetHour = resetHour,
                     enabled = enabled,
                     allowTimeRequest = allowTimeRequest,
+                    timingMode = timingMode,
                 )
             },
             onDismiss = viewModel::closePolicyEditor,
@@ -766,7 +768,7 @@ private fun PolicyDialog(
     deviceName: String,
     policy: PolicyBundleDto?,
     busy: Boolean,
-    onSave: (weekday: Int, weekend: Int, resetHour: Int, enabled: Boolean, allowTimeRequest: Boolean) -> Unit,
+    onSave: (weekday: Int, weekend: Int, resetHour: Int, enabled: Boolean, allowTimeRequest: Boolean, timingMode: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     // 输入框的初值来自服务端策略，加载完成后一次性同步
@@ -775,6 +777,7 @@ private fun PolicyDialog(
     var resetHour by remember(policy) { mutableStateOf(policy?.resetHour?.toString() ?: "0") }
     var enabled by remember(policy) { mutableStateOf(policy?.enabled ?: true) }
     var allowTimeRequest by remember(policy) { mutableStateOf(policy?.allowTimeRequest ?: true) }
+    var timingMode by remember(policy) { mutableStateOf(policy?.timingMode ?: "standard") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -866,6 +869,43 @@ private fun PolicyDialog(
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+
+                Text("计时方式", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "分屏/小窗上课时，非焦点但可见的应用是否计时、如何核对",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = timingMode == "recommended",
+                        onClick = { timingMode = "recommended" },
+                        label = { Text("推荐") },
+                    )
+                    FilterChip(
+                        selected = timingMode == "standard",
+                        onClick = { timingMode = "standard" },
+                        label = { Text("标准") },
+                    )
+                    FilterChip(
+                        selected = timingMode == "system",
+                        onClick = { timingMode = "system" },
+                        label = { Text("纯系统") },
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when (timingMode) {
+                        "recommended" -> "可见窗口并算 + 每 5 分钟用系统数据校准补漏（分屏小窗实时计时，漏计兜底）"
+                        "system" -> "额度完全按系统统计口径（约 2 分钟延迟），以系统数字为准"
+                        else -> "只计最前台应用（现状）。分屏/小窗里被切走的应用不计时间"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
                 Spacer(Modifier.height(12.dp))
 
                 Text(
@@ -884,6 +924,7 @@ private fun PolicyDialog(
                         resetHour.toIntOrNull() ?: 0,
                         enabled,
                         allowTimeRequest,
+                        timingMode,
                     )
                 },
                 enabled = !busy && policy != null,

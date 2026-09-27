@@ -16,6 +16,8 @@ data class PolicyEntity(
     val listMode: String,
     val allowTimeRequest: Boolean,
     val enabled: Boolean,
+    /** 计时方式：standard / recommended / system */
+    val timingMode: String = "standard",
     val version: Int,
     val updatedAt: Long,
     val syncedAt: Long,

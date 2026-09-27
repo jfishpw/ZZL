@@ -347,6 +347,8 @@ function migrate() {
   addColumnIfMissing('devices', 'icon_hidden', 'INTEGER NOT NULL DEFAULT 0');
   // DNS 防护：家长期望的私人 DNS 主机名（空 = 不启用）与设备上报的实际状态
   addColumnIfMissing('devices', 'private_dns_host', "TEXT NOT NULL DEFAULT ''");
+  // 计时方式：standard=现状单前台计时；recommended=可见窗口并算+系统对账；system=纯系统口径（对账驱动）
+  addColumnIfMissing('policies', 'timing_mode', "TEXT NOT NULL DEFAULT 'standard'");
   addColumnIfMissing('devices', 'private_dns_active', "TEXT");
 
   // client_key 由被控端生成，用于上报去重；SQLite 唯一索引视 NULL 为彼此不同，故历史行不受影响

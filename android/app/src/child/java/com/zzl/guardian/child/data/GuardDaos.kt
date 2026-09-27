@@ -44,6 +44,17 @@ interface SessionDao {
     @Query("SELECT COALESCE(SUM(durationMs), 0) FROM usage_sessions WHERE dayKey = :dayKey")
     suspend fun totalForDay(dayKey: String): Long
 
+    /** 当日按应用的原始用量汇总（对账校准用，不剔除豁免应用） */
+    @Query(
+        "SELECT packageName, COALESCE(SUM(durationMs), 0) AS total FROM usage_sessions " +
+            "WHERE dayKey = :dayKey GROUP BY packageName",
+    )
+    suspend fun perAppTotalsForDay(dayKey: String): List<PkgTotal>
+
+    /** 直接插入一条已收尾的会话（可见窗口并行计时 / 系统对账校准用） */
+    @Insert
+    suspend fun insertClosed(session: SessionEntity)
+
     /**
      * 当日**计入总时长**的用量：剔除被标记为不计入的应用。
      *
@@ -71,6 +82,12 @@ interface SessionDao {
     @Query("DELETE FROM usage_sessions WHERE uploaded = 1 AND startTs < :before")
     suspend fun pruneUploaded(before: Long)
 }
+
+/** 按应用汇总行的投影（对账校准用） */
+data class PkgTotal(
+    val packageName: String,
+    val total: Long,
+)
 
 @Dao
 interface PolicyListDao {

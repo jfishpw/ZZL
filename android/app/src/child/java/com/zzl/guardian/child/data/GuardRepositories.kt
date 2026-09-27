@@ -66,6 +66,7 @@ class PolicyRepository @Inject constructor(
                 listMode = bundle.listMode,
                 allowTimeRequest = bundle.allowTimeRequest,
                 enabled = bundle.enabled,
+                timingMode = bundle.timingMode,
                 version = bundle.version,
                 updatedAt = bundle.updatedAt,
                 syncedAt = System.currentTimeMillis(),
@@ -370,6 +371,30 @@ class UsageRepository @Inject constructor(
     }
 
     /**
+     * 直接写入一条已收尾的会话。供两处使用：
+     *  - 可见窗口并行计时（分屏/小窗里"非焦点但可见"的应用）
+     *  - 系统用量对账校准（发现漏计时补差额）
+     *
+     * 不经 open/close 通道 —— 那是给唯一的"焦点会话"用的。
+     */
+    suspend fun recordClosedSession(packageName: String, dayKey: String, startTs: Long, endTs: Long, clientKey: String) {
+        sessionDao.insertClosed(
+            SessionEntity(
+                clientKey = clientKey,
+                packageName = packageName,
+                startTs = startTs,
+                endTs = endTs,
+                durationMs = (endTs - startTs).coerceAtLeast(0),
+                dayKey = dayKey,
+            ),
+        )
+    }
+
+    /** 当日按应用的原始用量汇总（含豁免应用，对账用） */
+    suspend fun rawPerAppMs(dayKey: String): Map<String, Long> =
+        sessionDao.perAppTotalsForDay(dayKey).associate { it.packageName to it.total }
+
+    /**
      * 当日**计入总时长**的用量。
      *
      * @param excludePackages 被标记「不计入总时长」的应用。
@@ -664,6 +689,10 @@ object AuditAction {
     const val DNS_FAIL_OPEN = "dns.fail_open"
     const val DNS_RESTORED = "dns.restored"
     const val DNS_NEEDS_GRANT = "dns.needs_grant"
+
+    // 计时方式（系统用量对账）
+    const val TIMING_SYSTEM_UNAVAILABLE = "timing.system_unavailable"
+    const val TIMING_RECONCILED = "timing.reconciled"
 
     /**
      * 截屏**采集失败**（没有生成图片）。

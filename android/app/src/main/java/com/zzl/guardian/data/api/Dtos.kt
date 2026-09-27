@@ -174,6 +174,8 @@ data class PolicyBundleDto(
     val listMode: String = "blacklist",
     val allowTimeRequest: Boolean = true,
     val enabled: Boolean = true,
+    /** 计时方式：standard / recommended（可见窗口并算+系统对账）/ system（纯系统口径） */
+    val timingMode: String = "standard",
     val version: Int = 1,
     val updatedAt: Long = 0,
     val listItems: List<PolicyListItemDto> = emptyList(),
@@ -190,6 +192,8 @@ data class PolicyUpdateRequest(
     val enabled: Boolean,
     /** 是否允许孩子申请加时；null 表示不改动 */
     val allowTimeRequest: Boolean? = null,
+    /** 计时方式；null 表示不改动 */
+    val timingMode: String? = null,
 )
 
 @Serializable
