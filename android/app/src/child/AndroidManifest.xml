@@ -13,6 +13,11 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- 私人 DNS 防护：先在清单声明，再由 adb shell pm grant 授予（孩子无法撤销） -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- 到时全屏遮盖拦截 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
