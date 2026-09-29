@@ -213,8 +213,6 @@ export default async function usageRoutes(fastify) {
                          open_count = open_count + 1`,
           device.id, dayKey, packageName, durationMs,
         );
-      } else {
-        duplicated += 1;
       }
     }
 
