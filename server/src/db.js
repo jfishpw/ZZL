@@ -349,6 +349,8 @@ function migrate() {
   addColumnIfMissing('devices', 'private_dns_host', "TEXT NOT NULL DEFAULT ''");
   // 计时方式：standard=现状单前台计时；recommended=可见窗口并算+系统对账；system=纯系统口径（对账驱动）
   addColumnIfMissing('policies', 'timing_mode', "TEXT NOT NULL DEFAULT 'standard'");
+  // 逐应用：空闲（无人触摸）时是否继续计时（看视频/网课只看不摸的场景）
+  addColumnIfMissing('app_rules', 'keep_timing_on_idle', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing('devices', 'private_dns_active', "TEXT");
 
   // client_key 由被控端生成，用于上报去重；SQLite 唯一索引视 NULL 为彼此不同，故历史行不受影响

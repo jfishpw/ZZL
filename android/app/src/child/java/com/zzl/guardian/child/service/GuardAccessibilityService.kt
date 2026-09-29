@@ -90,6 +90,14 @@ class GuardAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val current = event ?: return
+
+        // 空闲检测的输入：任何触摸交互都刷新「最后交互时刻」
+        if (current.eventType == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START ||
+            current.eventType == AccessibilityEvent.TYPE_TOUCH_INTERACTION_END
+        ) {
+            lastTouchAt = System.currentTimeMillis()
+        }
+
         if (current.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             current.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED
         ) {
@@ -154,6 +162,8 @@ class GuardAccessibilityService : AccessibilityService() {
                 engine.foregroundLookup = { currentForegroundPackage() }
                 // 可见窗口集合（分屏/小窗并算计时用）：null 表示服务拿不到（当普通模式跑）
                 engine.visiblePackagesLookup = { visibleAppPackages() }
+                // 空闲检测输入：最后一次触摸时刻
+                engine.interactionLookup = { lastTouchAt }
                 engine.onForegroundChanged(currentForegroundPackage(), System.currentTimeMillis())
             }.onFailure { Log.w(TAG, "初始化管控引擎失败", it) }
         }
@@ -164,6 +174,9 @@ class GuardAccessibilityService : AccessibilityService() {
      * 无障碍事件只在切换时触发，服务刚启动时如果已有应用在前台，
      * 必须主动查一次，否则这段时间不会被计入使用时长。
      */
+    /** 最后一次触摸交互时刻（空闲检测输入）；服务启动时置为当前，避免开机即判空闲 */
+    private var lastTouchAt: Long = System.currentTimeMillis()
+
     private fun currentForegroundPackage(): String? = runCatching {
         val applicationWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
         val active = applicationWindows.firstOrNull { it.isActive } ?: applicationWindows.firstOrNull()

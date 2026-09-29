@@ -61,6 +61,7 @@ function toAppRuleView(row) {
     enabled: !!row.enabled,
     /** 用时不计入当日总时长（总时长耗尽后该应用仍可打开） */
     exemptTotal: !!row.exempt_total,
+    keepTimingOnIdle: !!row.keep_timing_on_idle,
   };
 }
 
@@ -183,6 +184,7 @@ function normalizeAppRules(input, deviceId) {
       enabled: item.enabled === undefined ? true : !!item.enabled,
       // 布尔开关，缺省即 false：老客户端不发这个字段时行为与从前完全一致
       exemptTotal: item.exemptTotal === undefined ? false : !!item.exemptTotal,
+      keepTimingOnIdle: item.keepTimingOnIdle === undefined ? false : !!item.keepTimingOnIdle,
     });
   }
 
@@ -325,7 +327,7 @@ export default async function policyRoutes(fastify) {
       for (const rule of normalized.value) {
         run(
           `INSERT INTO app_rules
-             (device_id, package_name, app_label, daily_limit_min, time_windows, weekdays_mask, enabled, exempt_total)
+             (device_id, package_name, app_label, daily_limit_min, time_windows, weekdays_mask, enabled, exempt_total, keep_timing_on_idle)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           device.id,
           rule.packageName,
@@ -335,6 +337,7 @@ export default async function policyRoutes(fastify) {
           rule.weekdaysMask,
           rule.enabled ? 1 : 0,
           rule.exemptTotal ? 1 : 0,
+          rule.keepTimingOnIdle ? 1 : 0,
         );
       }
     });
@@ -402,7 +405,7 @@ export default async function policyRoutes(fastify) {
         for (const rule of normalizedRules.value) {
           run(
             `INSERT INTO app_rules
-               (device_id, package_name, app_label, daily_limit_min, time_windows, weekdays_mask, enabled, exempt_total)
+               (device_id, package_name, app_label, daily_limit_min, time_windows, weekdays_mask, enabled, exempt_total, keep_timing_on_idle)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             device.id,
             rule.packageName,
@@ -412,6 +415,8 @@ export default async function policyRoutes(fastify) {
             rule.weekdaysMask,
             rule.enabled ? 1 : 0,
             rule.exemptTotal ? 1 : 0,
+          rule.keepTimingOnIdle ? 1 : 0,
+            rule.keepTimingOnIdle ? 1 : 0,
           );
         }
       }

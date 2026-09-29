@@ -127,6 +127,7 @@ class PolicyRepository @Inject constructor(
         weekdaysMask = weekdaysMask,
         enabled = enabled,
         exemptTotal = exemptTotal,
+        keepTimingOnIdle = keepTimingOnIdle,
     )
 
     /** 解析失败一律当作"没有时段限制"，避免一条脏数据把应用永久锁死 */

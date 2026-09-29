@@ -212,6 +212,8 @@ data class AppRuleEntity(
     /** 生效星期位掩码：bit0 = 周一 … bit6 = 周日 */
     val weekdaysMask: Int,
     val enabled: Boolean,
+    /** 空闲（无人触摸）时继续计时 */
+    val keepTimingOnIdle: Boolean = false,
     /**
      * 该应用的用时不计入当日总时长。
      *
@@ -259,8 +261,13 @@ data class GuardAppRule(
      * 所以它不会变成"无限使用"，家长想限制时长仍可单独设 [dailyLimitMin]。
      */
     val exemptTotal: Boolean = false,
+    /** 空闲（无人触摸）时继续计时（网课/视频） */
+    val keepTimingOnIdle: Boolean = false,
 ) {
     fun isActiveOn(weekdayBit: Int): Boolean = enabled && (weekdaysMask shr weekdayBit) and 1 == 1
+
+    /** 空闲挂起时该应用是否例外（继续计时） */
+    fun keepsTimingOnIdle(): Boolean = keepTimingOnIdle && enabled
 
     /**
      * 该应用此刻是否免于当日总时长的管控。

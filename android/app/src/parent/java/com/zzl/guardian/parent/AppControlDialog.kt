@@ -53,10 +53,12 @@ private data class RuleDraft(
     val enabled: Boolean = true,
     /** 该应用的用时不计入当日总时长 */
     val exemptTotal: Boolean = false,
+    /** 空闲（无人触摸）时继续计时 */
+    val keepTimingOnIdle: Boolean = false,
 ) {
     /** 用户是否动过这一行 —— 动过就要保留草稿，否则输入"0"的瞬间会被清空 */
     val hasInput: Boolean
-        get() = dailyLimitMin.isNotBlank() || windows.isNotEmpty() || exemptTotal
+        get() = dailyLimitMin.isNotBlank() || windows.isNotEmpty() || exemptTotal || keepTimingOnIdle
 
     /**
      * 是否值得下发给设备 —— 只填了 0 或全空的规则没有意义。
@@ -66,7 +68,7 @@ private data class RuleDraft(
      * 否则家长拨完开关一保存，这条规则会被静默丢掉，表现为"开关不生效"。
      */
     val isEffective: Boolean
-        get() = (dailyLimitMin.toIntOrNull() ?: 0) > 0 || windows.isNotEmpty() || exemptTotal
+        get() = (dailyLimitMin.toIntOrNull() ?: 0) > 0 || windows.isNotEmpty() || exemptTotal || keepTimingOnIdle
 }
 
 private val WEEKDAY_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
@@ -119,6 +121,7 @@ fun AppControlDialog(
                     weekdaysMask = rule.weekdaysMask,
                     enabled = rule.enabled,
                     exemptTotal = rule.exemptTotal,
+                    keepTimingOnIdle = rule.keepTimingOnIdle,
                 )
             } ?: emptyMap(),
         )
@@ -270,6 +273,7 @@ fun AppControlDialog(
                                 weekdaysMask = draft.weekdaysMask,
                                 enabled = draft.enabled,
                                 exemptTotal = draft.exemptTotal,
+                                keepTimingOnIdle = draft.keepTimingOnIdle,
                             )
                         }
                     onSave(listMode, listed, rules)
@@ -313,6 +317,7 @@ private fun AppRuleRow(
                         if (draft.isEffective) append(" · 已设规则")
                         // 收起状态也要一眼看得见豁免：这是最容易忘记自己设过的一项
                         if (draft.exemptTotal) append(" · 不计入总时长")
+                        if (draft.keepTimingOnIdle) append(" · 空闲仍计时")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -459,6 +464,24 @@ private fun RuleEditor(draft: RuleDraft, onChange: (RuleDraft) -> Unit) {
                 "启用该规则",
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            Switch(
+                checked = draft.keepTimingOnIdle,
+                onCheckedChange = { onChange(draft.copy(keepTimingOnIdle = it)) },
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("空闲时继续计时", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "亮屏但超过 2 分钟没人触摸时，计时会自动暂停；" +
+                        "网课/视频类应用打开此开关后，只看不摸的时间照常计入",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Spacer(Modifier.height(10.dp))

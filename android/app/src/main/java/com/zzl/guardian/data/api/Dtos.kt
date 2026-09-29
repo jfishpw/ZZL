@@ -152,6 +152,8 @@ data class AppRuleDto(
     /** 生效星期位掩码：bit0 = 周一 … bit6 = 周日 */
     val weekdaysMask: Int = 127,
     val enabled: Boolean = true,
+    /** 空闲（无人触摸）时是否继续计时（网课/视频只看不摸） */
+    val keepTimingOnIdle: Boolean = false,
     /**
      * 用时不计入当日总时长：总时长耗尽后该应用仍可打开。
      * 缺省 false —— 老设备收到不带该字段的策略时，行为与从前完全一致。

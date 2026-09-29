@@ -30,7 +30,7 @@ import javax.inject.Singleton
     // v7：app_limit_baseline 新增（逐应用限额的生效基线，实现「设 N 分钟 = 从现在起还能用 N 分钟」）。
     // 沿用破坏式迁移：本地库存的都是可从服务端重建的缓存与日志，
     // 为它维护迁移脚本的收益远低于脚本写错导致崩溃的风险。
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class GuardDatabase : RoomDatabase() {
@@ -69,6 +69,10 @@ object GuardDatabaseModule {
             .addMigrations(object : Migration(7, 8) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE policy_cache ADD COLUMN timing_mode TEXT NOT NULL DEFAULT 'standard'")
+                }
+            }, object : Migration(8, 9) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE app_rules_cache ADD COLUMN keepTimingOnIdle INTEGER NOT NULL DEFAULT 0")
                 }
             })
             .fallbackToDestructiveMigration()

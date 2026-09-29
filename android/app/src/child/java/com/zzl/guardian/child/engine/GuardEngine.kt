@@ -230,6 +230,9 @@ class GuardEngine @Inject constructor(
      */
     var visiblePackagesLookup: (() -> Set<String>?)? = null
 
+    /** 最后一次用户触摸时刻（无障碍注入）。null = 无数据，按非空闲处理 */
+    var interactionLookup: (() -> Long?)? = null
+
     /** 预警去重的额度日。跨天后清空 [warnedWarnKeys]，各类预警每天各提醒一次。 */
     private var warnDayKey: String? = null
 
@@ -492,6 +495,14 @@ class GuardEngine @Inject constructor(
         if (overrides.forcedLocked) {
             stopTiming(at)
             showLockedOverlay(at)
+            return
+        }
+
+        // 1.5 桌面不算使用：焦点在桌面时不开会话。
+        // 亮屏停在桌面上之前会被计成 launcher 的使用时长（真机 09-29 复现，24 分钟）
+        if (pkg != null && isDesktopPackage(pkg)) {
+            stopTiming(at)
+            clearBlockedState()
             return
         }
 
@@ -848,9 +859,27 @@ class GuardEngine @Inject constructor(
                 parallelRecorded = false
             }
 
+            // 空闲检测：亮屏但超过阈值无触摸 → 计时挂起（恢复触摸自动续上）。
+            // 挂起时主会话/未豁免并行会话都截到「最后一次触摸」，空闲段不进额度。
+            val lastTouch = if (screenInteractive) interactionLookup?.invoke() else null
+            val idle = screenInteractive && lastTouch != null && (at - lastTouch) >= IDLE_THRESHOLD_MS
+            when {
+                idle && !idleSuspended -> {
+                    val end = lastTouch ?: at
+                    if (openPackage != null && !keepsTimingOnIdle(openPackage)) closeOpenSession(end)
+                    closeParallelOnIdle(end)
+                    idleSuspended = true
+                }
+                !idle && idleSuspended -> {
+                    idleSuspended = false
+                    usedCommittedMs = todayTotal()
+                }
+            }
+
             // 孩子可能一直停留在同一个应用里，此时没有任何前台切换事件，
             // 只能靠巡检发现「额度用尽」「时段结束」以及「家长刚批准了加时」
-            applyDecision(openPackage ?: desiredPackage, at)
+            // 空闲挂起期间跳过（否则会立刻重开会话）
+            if (!idleSuspended) applyDecision(openPackage ?: desiredPackage, at)
 
             publishState(at)
         }
@@ -864,6 +893,21 @@ class GuardEngine @Inject constructor(
     /** 本轮是否有并行会话收尾（决定要不要刷新额度累计） */
     @Volatile
     private var parallelRecorded = false
+
+    /** 空闲挂起中：亮屏但无人触摸，一切计时暂停 */
+    @Volatile
+    private var idleSuspended = false
+
+    /** 该应用是否豁免空闲挂起（网课/视频只看不摸仍计时） */
+    private fun keepsTimingOnIdle(pkg: String?): Boolean =
+        pkg != null && guard?.rules[pkg]?.keepTimingOnIdle == true
+
+    /** 空闲挂起时收尾未豁免的并行会话（豁免的保留继续计时） */
+    private suspend fun closeParallelOnIdle(end: Long) {
+        for (pkg in parallelOpen.keys.toList()) {
+            if (!keepsTimingOnIdle(pkg)) closeParallelEntry(pkg, end, record = true)
+        }
+    }
 
     /** 供服务层读取当前策略的计时方式 */
     fun currentTimingMode(): String = guard?.policy?.timingMode ?: "standard"
@@ -880,6 +924,7 @@ class GuardEngine @Inject constructor(
      *  - 熄屏 / 被拦截 / 非 recommended 模式：全部收尾。
      */
     private suspend fun updateParallelSessions(at: Long) {
+        if (idleSuspended) return
         if (guard?.policy?.timingMode != "recommended" || !screenInteractive || _state.value.blocking) {
             closeAllParallel(at, record = true)
             return
@@ -1085,6 +1130,9 @@ class GuardEngine @Inject constructor(
 
         /** 并行会话最短时长：短于它视为窗口抖动，不落库 */
         const val MIN_PARALLEL_SESSION_MS = 5_000L
+
+        /** 无触摸多久判为空闲（亮屏但没人碰 → 计时挂起） */
+        const val IDLE_THRESHOLD_MS = 120_000L
 
         /** 锁定临门预警提前量 */
         const val WARN_BEFORE_LOCK_MS = 5 * 60_000L
