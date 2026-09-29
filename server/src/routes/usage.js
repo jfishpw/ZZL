@@ -149,6 +149,7 @@ export default async function usageRoutes(fastify) {
     }
 
     let accepted = 0;
+  let updated = 0;
     let duplicated = 0;
     let rejected = 0;
 
@@ -176,16 +177,34 @@ export default async function usageRoutes(fastify) {
         continue;
       }
 
-      const inserted = run(
-        `INSERT OR IGNORE INTO usage_sessions
-           (client_key, device_id, package_name, start_ts, end_ts, duration_ms, day_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        clientKey, device.id, packageName, startTs, endTsRaw, durationMs, dayKey,
+      const existing = one(
+        'SELECT id, duration_ms FROM usage_sessions WHERE client_key = ?',
+        clientKey,
       );
 
-      if (inserted.changes === 1) {
+      if (existing) {
+        // 已存在：只允许时长增长时更新（进行中会话的周期刷新 / 重传兜底）。
+        // 日汇总只补增量，绝不重复计费。
+        if (durationMs > existing.duration_ms) {
+          run(
+            'UPDATE usage_sessions SET end_ts = ?, duration_ms = ? WHERE id = ?',
+            endTsRaw, durationMs, existing.id,
+          );
+          run(
+            `UPDATE usage_daily SET total_ms = total_ms + ?
+             WHERE device_id = ? AND day_key = ? AND package_name = ?`,
+            durationMs - existing.duration_ms, device.id, dayKey, packageName,
+          );
+        }
+        updated += 1;
+      } else {
+        run(
+          `INSERT INTO usage_sessions
+             (client_key, device_id, package_name, start_ts, end_ts, duration_ms, day_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          clientKey, device.id, packageName, startTs, endTsRaw, durationMs, dayKey,
+        );
         accepted += 1;
-        // 会话明细与日汇总在同一事务里更严谨；此处单条 upsert 已足够，SQLite 单写者模型下不会并发冲突
         run(
           `INSERT INTO usage_daily (device_id, day_key, package_name, total_ms, open_count)
            VALUES (?, ?, ?, ?, 1)
@@ -208,7 +227,7 @@ export default async function usageRoutes(fastify) {
       });
     }
 
-    return { ok: true, accepted, duplicated, rejected };
+    return { ok: true, accepted, updated, duplicated, rejected };
   });
 
   /**
@@ -225,6 +244,7 @@ export default async function usageRoutes(fastify) {
     }
 
     let accepted = 0;
+  let updated = 0;
     let duplicated = 0;
     let rejected = 0;
 
@@ -251,7 +271,7 @@ export default async function usageRoutes(fastify) {
       else duplicated += 1;
     }
 
-    return { ok: true, accepted, duplicated, rejected };
+    return { ok: true, accepted, updated, duplicated, rejected };
   });
 
   /** 控制端：某日汇总（按应用降序） */
@@ -574,8 +594,27 @@ export default async function usageRoutes(fastify) {
     );
 
     const labels = labelMapFor(device.id);
+
+    // 同应用相邻会话聚合：间隔 ≤ 60 秒的碎片（课程类应用反复抢前台）合并为一条，
+    // 只影响展示 —— 原始会话不动，额度判定与排行不受影响。
+    const asc = [...rows].reverse();
+    const merged = [];
+    for (const r of asc) {
+      const last = merged[merged.length - 1];
+      const lastEnd = last?.end_ts ?? last?.start_ts ?? 0;
+      if (last && last.package_name === r.package_name && r.start_ts - lastEnd <= 60_000) {
+        last.duration_ms += r.duration_ms;
+        last.end_ts = r.end_ts === null ? null : (last.end_ts === null ? last.end_ts : r.end_ts);
+        if (r.end_ts === null) last.end_ts = null;
+        last.segments += 1;
+      } else {
+        merged.push({ ...r, segments: 1 });
+      }
+    }
+    merged.reverse();
+
     return {
-      sessions: rows.map((r) => ({
+      sessions: merged.map((r) => ({
         id: r.id,
         packageName: r.package_name,
         appLabel: labels.get(r.package_name) ?? null,
@@ -583,6 +622,7 @@ export default async function usageRoutes(fastify) {
         endTs: r.end_ts,
         durationMs: r.duration_ms,
         dayKey: r.day_key,
+        segments: r.segments,
       })),
     };
   });

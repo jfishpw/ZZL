@@ -532,15 +532,19 @@ private fun SessionRow(session: SessionDetailDto) {
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "${formatTime(session.startTs)} - ${formatTime(session.endTs ?: session.startTs + session.durationMs)}",
+                if (session.endTs == null) "${formatTime(session.startTs)} - 进行中"
+                else "${formatTime(session.startTs)} - ${formatTime(session.endTs)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
-            // 时间线展示的是单条会话：被拦/切走频繁的应用会切成很多不足 1 分钟的小段，
-            // 统一按分钟取整会显示成一排「0 分钟」，家长会误以为没有计时（真机反馈）。
-            formatDurationPrecise(session.durationMs),
+            // 时间线展示的是聚合条目：碎片会话已按应用合并（segments>1 表示反复抢前台）。
+            // 不足 1 分钟显示秒数，避免一排「0 分钟」（真机反馈）。
+            if (session.segments > 1)
+                "${formatDurationPrecise(session.durationMs)}（${session.segments}段）"
+            else
+                formatDurationPrecise(session.durationMs),
             style = MaterialTheme.typography.labelSmall,
         )
     }

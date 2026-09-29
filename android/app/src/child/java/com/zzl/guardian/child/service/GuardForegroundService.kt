@@ -301,6 +301,8 @@ class GuardForegroundService : Service() {
                 // 每 2 个周期（约 1 分钟）上报一次记录
                 if (tickCount % 2 == 0L) {
                     runCatching { usageRepository.uploadPending(current.token, current.deviceId) }
+                    // 进行中的会话也周期上报，报告实时可见
+                    runCatching { usageRepository.uploadOpenSession(current.token, current.deviceId) }
                     runCatching { usageRepository.uploadPendingBlocks(current.token, current.deviceId) }
                     runCatching { usageRepository.uploadPendingPinAttempts(current.token, current.deviceId) }
                     // 审计事件（权限被关、密码被试、绕过尝试）也走同一条批量补传通道。
@@ -1015,6 +1017,8 @@ class GuardForegroundService : Service() {
                             runCatching { commandRunner.pullAndRun(current.token, current.deviceId) }
                             syncDeviceState(current)
                             runCatching { usageRepository.uploadPending(current.token, current.deviceId) }
+                    // 进行中的会话也周期上报，报告实时可见
+                    runCatching { usageRepository.uploadOpenSession(current.token, current.deviceId) }
                             runCatching { usageRepository.uploadPendingBlocks(current.token, current.deviceId) }
                             if (!appsUploadedThisRun) launch { uploadInstalledApps(current) }
                         }

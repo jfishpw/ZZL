@@ -477,6 +477,25 @@ class UsageRepository @Inject constructor(
     }
 
     /**
+     * 上报当前**进行中**的会话：服务端按 clientKey 更新时长。
+     * 没有这一步的话，正在运行的应用要等被关闭才出现在报告里（真机反馈）。
+     * 不标记 uploaded —— 收尾后仍走批量通道做最终上报。
+     */
+    suspend fun uploadOpenSession(token: String, deviceId: Long) {
+        val open = sessionDao.currentOpen() ?: return
+        val now = System.currentTimeMillis()
+        runCatching {
+            api.reportUsage(
+                authorization = "Bearer \$token",
+                deviceId = deviceId,
+                body = UsageReportRequest(
+                    listOf(open.copy(endTs = null, durationMs = (now - open.startTs).coerceAtLeast(0)).toDto()),
+                ),
+            )
+        }
+    }
+
+    /**
      * 上报未上传的拦截记录，与使用会话同一套幂等思路。
      * 家长正是靠这批数据知道"孩子被拦了几次、因为什么"，
      * 缺一条都可能让家长误判管控是否有效。

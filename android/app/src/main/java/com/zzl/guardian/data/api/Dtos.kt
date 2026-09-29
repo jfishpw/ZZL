@@ -268,6 +268,7 @@ data class UsageReportRequest(
 data class UsageReportResponse(
     val ok: Boolean = false,
     val accepted: Int = 0,
+    val updated: Int = 0,
     val duplicated: Int = 0,
     val rejected: Int = 0,
 )
@@ -571,6 +572,7 @@ data class BlockReportRequest(
 data class BlockReportResponse(
     val ok: Boolean = false,
     val accepted: Int = 0,
+    val updated: Int = 0,
     val duplicated: Int = 0,
     val rejected: Int = 0,
 )
@@ -584,6 +586,8 @@ data class SessionDetailDto(
     val endTs: Long? = null,
     val durationMs: Long = 0,
     val dayKey: String = "",
+    /** 聚合后包含的原始会话数（>1 表示该应用在反复抢前台） */
+    val segments: Int = 1,
 )
 
 @Serializable
@@ -675,6 +679,7 @@ data class PinAttemptsRequest(
 data class PinAttemptsResponse(
     val ok: Boolean = false,
     val accepted: Int = 0,
+    val updated: Int = 0,
     val duplicated: Int = 0,
     val rejected: Int = 0,
     val attempts: List<PinAttemptDto> = emptyList(),
