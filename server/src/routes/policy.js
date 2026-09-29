@@ -328,7 +328,7 @@ export default async function policyRoutes(fastify) {
         run(
           `INSERT INTO app_rules
              (device_id, package_name, app_label, daily_limit_min, time_windows, weekdays_mask, enabled, exempt_total, keep_timing_on_idle)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           device.id,
           rule.packageName,
           rule.appLabel,
@@ -415,7 +415,6 @@ export default async function policyRoutes(fastify) {
             rule.weekdaysMask,
             rule.enabled ? 1 : 0,
             rule.exemptTotal ? 1 : 0,
-          rule.keepTimingOnIdle ? 1 : 0,
             rule.keepTimingOnIdle ? 1 : 0,
           );
         }
