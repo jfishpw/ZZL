@@ -406,7 +406,7 @@ export default async function policyRoutes(fastify) {
           run(
             `INSERT INTO app_rules
                (device_id, package_name, app_label, daily_limit_min, time_windows, weekdays_mask, enabled, exempt_total, keep_timing_on_idle)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             device.id,
             rule.packageName,
             rule.appLabel,
