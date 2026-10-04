@@ -498,14 +498,6 @@ class GuardEngine @Inject constructor(
             return
         }
 
-        // 1.5 桌面不算使用：焦点在桌面时不开会话。
-        // 亮屏停在桌面上之前会被计成 launcher 的使用时长（真机 09-29 复现，24 分钟）
-        if (pkg != null && isDesktopPackage(pkg)) {
-            stopTiming(at)
-            clearBlockedState()
-            return
-        }
-
         // 2. 没有前台应用（桌面/系统组件）、熄屏、或策略还没到手：不拦也不计时
         if (pkg == null || !screenInteractive || policy == null) {
             stopTiming(at)
@@ -539,7 +531,8 @@ class GuardEngine @Inject constructor(
             if (_state.value.timeRequestStatus != null) {
                 _state.value = _state.value.copy(timeRequestStatus = null)
             }
-            if (openPackage != pkg) startSession(pkg, at, appUsedRaw)
+            // 桌面不计时：不给桌面开计时会话，但拦截判定照常（额度耗尽时桌面也被遮罩压住）
+            if (openPackage != pkg && !isDesktopPackage(pkg)) startSession(pkg, at, appUsedRaw)
             return
         }
 
