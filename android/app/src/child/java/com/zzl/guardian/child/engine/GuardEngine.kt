@@ -363,30 +363,43 @@ class GuardEngine @Inject constructor(
             return
         }
 
-        // 快速通道：名单类「确定必拦」的应用（黑名单命中/白名单外）打开时零等待拦截。
-        // 3 秒确认期对孩子而言是"打开被拉黑的应用还能玩一会儿"，明显破坏规则体验；
-        // 名单判定不依赖用量，可零成本预判。瞬态窗口恰属被拉黑应用的误拦概率极低，
-        // 且下方 recheck 会在 3 秒内发现假事件并自动回滚 —— 宁可短促误拦，不可延迟放行。
-        val fastReason = pkg?.let { p ->
-            guard?.let { g -> RuleJudge.listedBlockReason(g, currentOverrides(), p, at) }
-        }
-        if (pkg != null && fastReason != null) {
-            cancelPendingCandidate()
-            scope.launch {
-                commitForegroundNow(pkg, at)
-                scheduleForegroundRecheck(pkg)
-            }
-            return
-        }
-
-        // 常规路径：候选-核实（防瞬态窗口把会话切碎）
+        // 快速通道：「确定必拦」的应用零等待拦截 —— 不止名单类，
+        // 额度类（总时长耗尽/单应用上限/时段外）同样必须即时遮蔽：
+        // 3 秒确认期对孩子而言是"打开受限应用还能玩一会儿"，明显破坏规则体验。
+        // 判定在协程里做（候选应用的用量需查一次库，毫秒级），结果只增不减不会过期；
+        // 瞬态窗口误拦由 recheck 在 3 秒内核实并自动回滚 —— 宁可短促误拦，不可延迟放行。
+        // 不受限应用的正常切换仍走 3 秒防抖（防会话碎片），不受影响。
         pendingPackage = pkg
         pendingEventAt = at
         pendingJob?.cancel()
         pendingJob = scope.launch {
-            delay(FOREGROUND_CONFIRM_MS)
-            commitForeground(pkg)
+            if (pkg != null && certainBlocked(pkg, at)) {
+                commitForegroundNow(pkg, at)
+                scheduleForegroundRecheck(pkg)
+            } else {
+                delay(FOREGROUND_CONFIRM_MS)
+                commitForeground(pkg)
+            }
         }
+    }
+
+    /**
+     * 候选应用此刻是否「确定被拦」（快速通道判定）。
+     *
+     * 名单类不依赖用量零成本预判；额度/时段类复用 [RuleJudge.decide] 完整判定——
+     * 候选非当前打开应用时其用量按库里已收尾值计算（inflight 为 0），
+     * 净基线口径与 [applyDecision] 完全一致。用量只增不减，判定不会在提交前失效。
+     */
+    private suspend fun certainBlocked(pkg: String, at: Long): Boolean {
+        val g = guard ?: return false
+        val overrides = currentOverrides()
+        RuleJudge.listedBlockReason(g, overrides, pkg, at)?.let { return true }
+        if (!g.policy.enabled) return false // 管控总开关已关：必放行，不必查库
+        val appRaw = runCatching {
+            usageRepository.usedTodayMsForApp(currentDayKey(), pkg)
+        }.getOrDefault(0L)
+        val appNet = netAppUsedMs(g, pkg, at, appRaw)
+        return RuleJudge.decide(g, overrides, pkg, at, used(), appNet) != null
     }
 
     private fun cancelPendingCandidate() {
