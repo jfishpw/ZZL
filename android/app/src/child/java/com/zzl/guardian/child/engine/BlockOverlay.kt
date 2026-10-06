@@ -58,6 +58,13 @@ class BlockOverlay @Inject constructor(
     private var subtitleView: TextView? = null
     private var detailView: TextView? = null
     private var requestButton: TextView? = null
+
+    /** 「回到桌面」按钮（锁定态与总时长耗尽时隐藏） */
+    private var homeButton: TextView? = null
+
+    /** 当前拦截是否为「今日总时长已用完」——那种情况本就不该放孩子回桌面玩 */
+    @Volatile
+    private var totalExhausted = false
     private var hintView: TextView? = null
 
     /* ---------------- 内联密码区 ---------------- */
@@ -115,8 +122,10 @@ class BlockOverlay @Inject constructor(
         onPinAction: ((action: String, onResult: (String?) -> Unit) -> Unit)?,
         onGoHome: () -> Unit,
         deviceLocked: Boolean = false,
+        isTotalExhausted: Boolean = false,
     ) {
         overlayLocked = deviceLocked
+        totalExhausted = isTotalExhausted
         mainHandler.post {
             if (rootView != null) {
                 refresh(
@@ -192,6 +201,10 @@ class BlockOverlay @Inject constructor(
             button.setOnClickListener { if (button.isEnabled) onRequestTime?.invoke() }
         }
 
+        // 「回到桌面」只在确实可以离开的拦截场景出现：
+        // 名单/时段/单应用上限 → 桌面可用，按钮有意义；总时长耗尽/设备锁定 → 桌面同样压住，不给。
+        homeButton?.visibility = if (overlayLocked || totalExhausted) View.GONE else View.VISIBLE
+
         hintView?.text = requestHint ?: DEFAULT_HINT
 
         // 密码区的回调是转发引擎的 volatile 字段，闭包本身无状态，
@@ -261,8 +274,15 @@ class BlockOverlay @Inject constructor(
         column.addView(requestButton)
         column.addView(space(dp(14)))
 
-        // 「回到桌面」按钮已按家长反馈移除：全面屏手势（侧滑）可以直接离开，
-        // 按钮反而成了孩子反复进出的入口。onGoHome 参数保留备用。
+        // 「回到桌面」：侧滑手势在部分机型/儿童手上并不可靠，给一条明确的出路。
+        // 点击后走服务层的兜底链（全局 HOME 动作 → HOME Intent → 上滑手势），逐级核实。
+        homeButton = button("回到桌面") { onGoHome() }.apply {
+            background = GradientDrawable().apply {
+                cornerRadius = dp(28).toFloat()
+                setColor(SECONDARY)
+            }
+        }
+        column.addView(homeButton)
         column.addView(space(dp(16)))
         hintView = text(requestHint ?: DEFAULT_HINT, 13f, MUTED)
         column.addView(hintView)

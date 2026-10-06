@@ -699,6 +699,8 @@ class GuardEngine @Inject constructor(
             // 名单命中是家长的明确决定，家长主动锁定更是，两者给申请入口
             // 都只会把功能变成讨价还价的噪音。
             canRequestTime = policy?.policy?.allowTimeRequest == true && requestableReason(reason),
+            // 总时长耗尽时桌面同样被压住，不提供「回到桌面」
+            isTotalExhausted = reason == BlockReason.TOTAL_EXHAUSTED,
             requestHint = _state.value.timeRequestStatus?.let(::requestHintText),
             onRequestTime = {
                 requestTimeHandler?.invoke(scopeForReason(reason), pkg)
