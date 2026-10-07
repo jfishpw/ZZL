@@ -154,6 +154,30 @@ class GuardForegroundService : Service() {
         systemUsageReconciler = graph.systemUsageReconciler()
         capturer = graph.screenshotCapturer()
 
+        // 触摸统计桥接：无障碍服务重连会更新实例，断开则返回 null（通道自愈据此触发）
+        engine.touchStatsLookup = {
+            GuardAccessibilityService.connectedInstance?.let { it.lastTouchAt to it.touchEventCount }
+        }
+
+        // 服务启动审计：进程被系统清理后重启时，把「死亡区间」定量写进操作记录
+        scope.launch {
+            runCatching {
+                val prefs = getSharedPreferences("zzl_local_service", Context.MODE_PRIVATE)
+                val prev = prefs.getLong("last_alive", 0L)
+                prefs.edit().putLong("last_alive", System.currentTimeMillis()).apply()
+                if (prev > 0) {
+                    val gapMin = (System.currentTimeMillis() - prev) / 60_000
+                    if (gapMin >= 5) {
+                        usageRepository.recordAudit(
+                            action = "service.restarted",
+                            detail = "距上次运行约 " + gapMin + " 分钟：进程可能被系统清理（请在系统电池设置中把掌中灵设为无限制）",
+                            level = "warn",
+                        )
+                    }
+                }
+            }
+        }
+
         // 拦截页上的「申请加时」按钮交给引擎触发，引擎自己不碰网络 ——
         // 它必须能在完全离线时照常工作
         engine.requestTimeHandler = { scopeName, packageName ->

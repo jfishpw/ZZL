@@ -71,6 +71,7 @@ class GuardAccessibilityService : AccessibilityService() {
     private val lastHomeChainAt = AtomicLong(0L)
 
     override fun onServiceConnected() {
+        connectedInstance = this
         super.onServiceConnected()
         Log.i(TAG, "无障碍服务已连接")
 
@@ -96,6 +97,7 @@ class GuardAccessibilityService : AccessibilityService() {
             current.eventType == AccessibilityEvent.TYPE_TOUCH_INTERACTION_END
         ) {
             lastTouchAt = System.currentTimeMillis()
+            touchEventCount += 1
         }
 
         if (current.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -139,6 +141,8 @@ class GuardAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         engine.performHome = null
         engine.foregroundLookup = null
+        // 断开即清除实例：前台服务的空闲通道自愈会据此判定触摸事件通道失效
+        connectedInstance = null
         // 摘掉截屏能力：服务即将销毁，留着弱引用也只会指向一个死对象，
         // 而 isReady() 会因此误报"可用"，让家长收到一个莫名其妙的超时
         capturer.detach()
@@ -175,7 +179,12 @@ class GuardAccessibilityService : AccessibilityService() {
      * 必须主动查一次，否则这段时间不会被计入使用时长。
      */
     /** 最后一次触摸交互时刻（空闲检测输入）；服务启动时置为当前，避免开机即判空闲 */
-    private var lastTouchAt: Long = System.currentTimeMillis()
+    var lastTouchAt: Long = System.currentTimeMillis()
+        private set
+
+    /** 触摸交互事件计数（空闲通道自愈检测用） */
+    var touchEventCount: Int = 0
+        private set
 
     private fun currentForegroundPackage(): String? = runCatching {
         val applicationWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
@@ -300,7 +309,11 @@ class GuardAccessibilityService : AccessibilityService() {
         }
     }.getOrDefault(emptySet())
 
-    private companion object {
+    companion object {
+        /** 供前台服务读取触摸统计；无障碍重连/断开时更新 */
+        @Volatile
+        var connectedInstance: GuardAccessibilityService? = null
+
         const val TAG = "GuardAccessibility"
 
         /** SystemUI 的窗口事件不代表前台应用切换（详见 onAccessibilityEvent 内注释） */

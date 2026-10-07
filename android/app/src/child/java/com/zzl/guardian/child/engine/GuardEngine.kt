@@ -869,11 +869,37 @@ class GuardEngine @Inject constructor(
 
             // 空闲检测：亮屏但超过阈值无触摸 → 计时挂起（恢复触摸自动续上）。
             // 挂起时主会话/未豁免并行会话都截到「最后一次触摸」，空闲段不进额度。
+            // 触摸通道自愈检测：屏幕亮着、前台在切换（设备在用），但触摸计数 10 分钟纹丝不动
+            // → 说明无障碍触摸事件没送达（更新后未重开无障碍等），空闲挂起会永久误判，必须停用并提示
+            val touchStats = touchStatsLookup?.invoke()
+            if (screenInteractive && touchStats != null) {
+                val (touchAt, touchCount) = touchStats
+                if (touchCount != lastTouchCountSeen) {
+                    lastTouchCountSeen = touchCount
+                    touchStallSince = null
+                    idleHealAuditFired = false
+                } else if (touchStallSince == null) {
+                    touchStallSince = at
+                } else if (!idleHealAuditFired && at - touchStallSince!! >= 10 * 60_000L) {
+                    idleHealAuditFired = true
+                    scope.launch {
+                        runCatching {
+                            usageRepository.recordAudit(
+                                action = "touch_channel.stalled",
+                                detail = "亮屏且前台在切换，但 10 分钟未收到触摸事件：空闲挂起已自动停用，请重新关闭再打开无障碍",
+                                level = "warn",
+                            )
+                        }
+                    }
+                }
+            }
+
             val lastTouch = if (screenInteractive) interactionLookup?.invoke() else null
-            val idle = screenInteractive && lastTouch != null && (at - lastTouch) >= IDLE_THRESHOLD_MS
+            val idle = screenInteractive && !idleHealAuditFired && lastTouch != null && (at - lastTouch) >= IDLE_THRESHOLD_MS
             when {
                 idle && !idleSuspended -> {
-                    val end = lastTouch ?: at
+                    // 钳制：结束时间不得早于本段会话开始（触摸通道失效时 lastTouch 可能远早于会话起点）
+                    val end = maxOf(lastTouch ?: at, openStartTs)
                     if (openPackage != null && !keepsTimingOnIdle(openPackage)) closeOpenSession(end)
                     closeParallelOnIdle(end)
                     idleSuspended = true
@@ -905,6 +931,12 @@ class GuardEngine @Inject constructor(
     /** 空闲挂起中：亮屏但无人触摸，一切计时暂停 */
     @Volatile
     private var idleSuspended = false
+
+    /** 触摸通道自愈：触摸计数停滞且窗口事件仍在流动 → 通道失效，停用空闲挂起 */
+    var touchStatsLookup: (() -> Pair<Long, Int>?)? = null
+    private var lastTouchCountSeen = -1
+    private var touchStallSince: Long? = null
+    private var idleHealAuditFired = false
 
     /** 该应用是否豁免空闲挂起（网课/视频只看不摸仍计时） */
     private fun keepsTimingOnIdle(pkg: String?): Boolean =
