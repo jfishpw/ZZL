@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import com.zzl.guardian.parent.local.LocalModeScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,6 +74,7 @@ import com.zzl.guardian.ui.serversettings.ServerSettingsDialog
 fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showServerSettings by remember { mutableStateOf(false) }
+    var showLocalMode by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val message = state.error ?: state.notice
@@ -128,6 +130,7 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
                     onLogin = viewModel::login,
                     onRegister = viewModel::register,
                     onServerSettings = { showServerSettings = true },
+                    onLocalMode = { showLocalMode = true },
                 )
 
                 else -> DeviceList(
@@ -143,11 +146,16 @@ fun ParentHome(viewModel: ParentViewModel = hiltViewModel()) {
                     onOpenHardening = { viewModel.openHardening(it) },
                     onOpenScreenshots = { viewModel.openScreenshots(it) },
                     onOpenAudit = { viewModel.openAudit(it) },
+                    onLocalMode = { showLocalMode = true },
                     onOpenTimeRequests = { viewModel.openTimeRequests() },
                     onDeleteDevice = { viewModel.requestDeleteDevice(it) },
                 )
             }
         }
+    }
+
+    if (showLocalMode) {
+        LocalModeScreen(onDismiss = { showLocalMode = false })
     }
 
     state.pairCode?.let { code ->
@@ -399,6 +407,7 @@ private fun LoginScreen(
     onLogin: (String, String) -> Unit,
     onRegister: (String, String) -> Unit,
     onServerSettings: () -> Unit,
+    onLocalMode: () -> Unit,
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -464,6 +473,9 @@ private fun LoginScreen(
 
         Spacer(Modifier.height(24.dp))
 
+        TextButton(onClick = onLocalMode, modifier = Modifier.fillMaxWidth()) {
+            Text("本地模式（局域网直连，无需服务器）")
+        }
         TextButton(onClick = onServerSettings, modifier = Modifier.fillMaxWidth()) {
             Text("服务器设置 · $serverDisplay", fontSize = 13.sp)
         }
@@ -488,6 +500,7 @@ private fun DeviceList(
     onOpenAudit: (Long) -> Unit,
     onOpenTimeRequests: () -> Unit,
     onDeleteDevice: (Long) -> Unit,
+    onLocalMode: () -> Unit,
 ) {
     if (devices.isEmpty()) {
         Column(
@@ -581,6 +594,12 @@ private fun DeviceList(
             }
         }
 
+        item {
+            OutlinedButton(onClick = onLocalMode, modifier = Modifier.fillMaxWidth()) {
+                Text("本地模式（局域网直连，无需服务器）")
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         items(devices, key = { it.id }) { device ->
             DeviceCard(
                 device = device,

@@ -125,11 +125,11 @@ class LocalHttpServer(
     private fun route(method: String, path: String, body: String): Pair<String, String> {
         return when {
             path == "/local/v1/pair" && method == "POST" -> handlePair(body)
-            path == "/local/v1/ping" && method == "GET" -> "200" to "{\"ok\":true,\"paired\":${identity.hasPairedParent()}}"
+            path == "/local/v1/ping" && (method == "GET" || method == "POST") -> "200" to "{\"ok\":true,\"paired\":${identity.hasPairedParent()}}"
             !identity.hasPairedParent() -> "403" to "{\"error\":\"not_paired\"}"
             !verifySignature(path, body) -> "401" to "{\"error\":\"bad_signature\"}"
-            path == "/local/v1/state" && method == "GET" -> handleState()
-            path == "/local/v1/policy" && method == "GET" -> handleGetPolicy()
+            path == "/local/v1/state" && (method == "GET" || method == "POST") -> handleState()
+            path == "/local/v1/policy" && (method == "GET" || method == "POST") -> handleGetPolicy()
             path == "/local/v1/policy" && method == "PUT" -> handlePutPolicy(body)
             path == "/local/v1/command" && method == "POST" -> handleCommand(body)
             else -> "404" to "{\"error\":\"not_found\"}"
@@ -152,7 +152,7 @@ class LocalHttpServer(
         identity.rememberParent(obj.pub)
         // 回执：用 M 对固定串签名，家长端校验后确认密钥一致
         val proof = Base64.encodeToString(identity.sign(master, "zzl-pair-proof".toByteArray()), Base64.NO_WRAP)
-        return "200" to "{\"ok\":true,\"proof\":\"$proof\"}"
+        return "200" to "{\"ok\":true,\"proof\":\"$proof\",\"childPub\":\"$identity.devicePublicKey\"}"
     }
 
     private fun verifySignature(path: String, body: String): Boolean {
