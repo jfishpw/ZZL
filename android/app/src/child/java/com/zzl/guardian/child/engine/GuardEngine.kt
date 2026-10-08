@@ -253,6 +253,16 @@ class GuardEngine @Inject constructor(
 
     private var initializedDeviceId = 0L
 
+    /** 本地模式锁定开关（家长端局域网直连时设置；独立字段，服务器模式零影响） */
+    @Volatile
+    var localLocked = false
+
+    /** 当前策略绑定的设备 ID（未配对时为 0，本地模式据此落库） */
+    fun currentPolicyDeviceId(): Long = initializedDeviceId
+
+    /** 策略快照（本地通道拉取策略用） */
+    fun guardPolicySnapshot(): GuardPolicy? = guard
+
     private var lastBlockPackage: String? = null
     private var lastBlockReason: String? = null
     private var lastBlockAt = 0L
@@ -504,8 +514,9 @@ class GuardEngine @Inject constructor(
         val overrides = currentOverrides()
         val policy = guard
 
-        // 1. 家长点了「立即锁定」：与前台是谁无关，遮罩必须一直在
-        if (overrides.forcedLocked) {
+            // 1. 家长点了「立即锁定」：与前台是谁无关，遮罩必须一直在
+            //    本地模式的锁定开关同样压过一切（独立字段，服务器模式零影响）
+            if (overrides.forcedLocked || localLocked) {
             stopTiming(at)
             showLockedOverlay(at)
             return

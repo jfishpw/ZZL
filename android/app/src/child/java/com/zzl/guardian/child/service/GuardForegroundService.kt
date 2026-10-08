@@ -30,6 +30,8 @@ import com.zzl.guardian.child.di.guardGraph
 import com.zzl.guardian.child.engine.CommandRunner
 import com.zzl.guardian.child.engine.GuardEngine
 import com.zzl.guardian.child.icon.IconController
+import com.zzl.guardian.child.local.LocalHttpServer
+import com.zzl.guardian.child.local.LocalIdentity
 import com.zzl.guardian.child.keepalive.GuardKeepaliveAlarm
 import com.zzl.guardian.child.keepalive.GuardKeepaliveWorker
 import com.zzl.guardian.child.keepalive.KeepaliveManager
@@ -99,6 +101,10 @@ class GuardForegroundService : Service() {
     private lateinit var pinStore: PinStore
     private lateinit var keepaliveStore: KeepaliveStore
     private lateinit var iconController: IconController
+
+    /** 本地模式（局域网直连）：未启用/未配对时为零开销 */
+    private lateinit var localIdentity: LocalIdentity
+    private var localServer: LocalHttpServer? = null
     private lateinit var privateDnsController: PrivateDnsController
     private lateinit var systemUsageReconciler: SystemUsageReconciler
     private lateinit var capturer: ScreenshotCapturer
@@ -157,6 +163,24 @@ class GuardForegroundService : Service() {
         // 触摸统计桥接：无障碍服务重连会更新实例，断开则返回 null（通道自愈据此触发）
         engine.touchStatsLookup = {
             GuardAccessibilityService.connectedInstance?.let { it.lastTouchAt to it.touchEventCount }
+        }
+
+        // 本地模式：已配对家长端存在时启动局域网监听与 mDNS（其余场景零开销）
+        localIdentity = LocalIdentity(this@GuardForegroundService)
+        if (localIdentity.hasPairedParent()) {
+            localServer = LocalHttpServer(
+                context = this@GuardForegroundService,
+                identity = localIdentity,
+                policyRepository = policyRepository,
+                engine = engine,
+                json = json,
+                scope = scope,
+            )
+            localServer?.start()
+            // 本地策略落库槽位：从未配对过服务器时引擎尚无策略设备 ID，落在 0 号槽
+            if (engine.currentPolicyDeviceId() == 0L) {
+                scope.launch { runCatching { engine.initialize(0L) } }
+            }
         }
 
         // 服务启动审计：进程被系统清理后重启时，把「死亡区间」定量写进操作记录
@@ -244,6 +268,7 @@ class GuardForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching { localServer?.stop() }
         runCatching { unregisterReceiver(screenReceiver) }
         // 摘掉回调：引擎是单例，活过服务实例。不摘的话它会一直持有
         // 已销毁服务的引用，孩子点「申请加时」将没有任何反应
