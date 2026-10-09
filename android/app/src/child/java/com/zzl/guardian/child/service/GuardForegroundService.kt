@@ -165,22 +165,21 @@ class GuardForegroundService : Service() {
             GuardAccessibilityService.connectedInstance?.let { it.lastTouchAt to it.touchEventCount }
         }
 
-        // 本地模式：已配对家长端存在时启动局域网监听与 mDNS（其余场景零开销）
+        // 本地模式：始终启动监听与 mDNS —— 首次配对也依赖它（通知展示设备码/令牌/IP）。
+        // 监听端口与 mDNS 注册开销极小；未配对时除 pair/ping 外的请求全部拒绝。
         localIdentity = LocalIdentity(this@GuardForegroundService)
-        if (localIdentity.hasPairedParent()) {
-            localServer = LocalHttpServer(
-                context = this@GuardForegroundService,
-                identity = localIdentity,
-                policyRepository = policyRepository,
-                engine = engine,
-                json = json,
-                scope = scope,
-            )
-            localServer?.start()
-            // 本地策略落库槽位：从未配对过服务器时引擎尚无策略设备 ID，落在 0 号槽
-            if (engine.currentPolicyDeviceId() == 0L) {
-                scope.launch { runCatching { engine.initialize(0L) } }
-            }
+        localServer = LocalHttpServer(
+            context = this@GuardForegroundService,
+            identity = localIdentity,
+            policyRepository = policyRepository,
+            engine = engine,
+            json = json,
+            scope = scope,
+        )
+        localServer?.start()
+        // 本地策略落库槽位：从未配对过服务器时引擎尚无策略设备 ID，落在 0 号槽
+        if (engine.currentPolicyDeviceId() == 0L) {
+            scope.launch { runCatching { engine.initialize(0L) } }
         }
 
         // 服务启动审计：进程被系统清理后重启时，把「死亡区间」定量写进操作记录
