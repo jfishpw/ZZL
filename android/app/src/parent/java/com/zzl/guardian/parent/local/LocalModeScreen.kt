@@ -1,5 +1,8 @@
 package com.zzl.guardian.parent.local
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonObject
@@ -48,6 +54,36 @@ fun LocalModeScreen(onDismiss: () -> Unit) {
     var weekendMin by remember { mutableStateOf("") }
     var resetHour by remember { mutableStateOf("") }
     var policyEnabled by remember { mutableStateOf(true) }
+
+    // 扫码配对：扫到被控端二维码后自动填表，家长确认后点「配对」
+    val scanOptions = {
+        ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            setPrompt("扫描被控端「本地连接」里的配对二维码")
+            setBeepEnabled(false)
+            setOrientationLocked(false)
+        }
+    }
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val text = result.contents
+        if (text != null) {
+            runCatching {
+                kotlinx.serialization.json.Json.parseToJsonElement(text).jsonObject
+            }.getOrNull()?.let { obj ->
+                obj["code"]?.jsonPrimitive?.content?.let { deviceCode = it }
+                obj["token"]?.jsonPrimitive?.content?.let { token = it }
+                obj["ip"]?.jsonPrimitive?.content?.let { ip = it }
+                obj["port"]?.jsonPrimitive?.content?.let { port = it }
+                message = "已读取二维码，确认无误后点「配对」"
+            }
+        }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) scanLauncher.launch(scanOptions())
+        else message = "没有相机权限，请手动输入设备码与令牌"
+    }
 
     suspend fun refreshState() {
         val text = transport.getState()
@@ -138,6 +174,19 @@ fun LocalModeScreen(onDismiss: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        val granted = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.CAMERA,
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (granted) scanLauncher.launch(scanOptions())
+                        else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("扫码配对") }
+                Spacer(Modifier.height(8.dp))
+                Text("或手动输入下面三项：", fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = {
                         busy = true; message = null

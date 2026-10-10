@@ -3,11 +3,14 @@ package com.zzl.guardian.child.local
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -27,7 +30,14 @@ fun LocalPairingDialog(onDismiss: () -> Unit) {
     var token by remember { mutableStateOf(info.token()) }
     var remaining by remember { mutableStateOf(info.tokenRemainingSeconds()) }
 
-    // 令牌倒计时（到点自动换一个新的，避免家长抄了过期令牌）
+    // 二维码载荷与控制端「扫码配对」约定一致（见 docs/本地模式设计.md §3.2）
+    val payload = """{"v":1,"code":"${info.deviceCode}","token":"$token","ip":"${info.ip()}","port":${info.port}}"""
+    val qr = remember(payload) {
+        runCatching {
+            com.journeyapps.barcodescanner.BarcodeEncoder()
+                .encodeBitmap(payload, com.google.zxing.BarcodeFormat.QR_CODE, 560, 560)
+        }.getOrNull()
+    }
     LaunchedEffect(token) {
         while (true) {
             remaining = info.tokenRemainingSeconds()
@@ -42,11 +52,20 @@ fun LocalPairingDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("本地连接（局域网直连）") },
         text = {
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    "家长手机与被控端连同一个 WiFi，在控制端「本地模式」里输入下面三项即可配对。",
+                    "家长手机连同一个 WiFi，用控制端「本地模式 → 扫码配对」扫下方二维码；也可以手动输入这三项。",
                     fontSize = 13.sp,
                 )
+                if (qr != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Image(
+                        bitmap = qr.asImageBitmap(),
+                        contentDescription = "配对二维码",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(220.dp),
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
 
                 PairingRow("设备码", info.deviceCode, context)

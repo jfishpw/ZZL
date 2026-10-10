@@ -59,8 +59,8 @@ android {
     defaultConfig {
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.0.16"
+        versionCode = 18
+        versionName = "1.0.17"
 
         vectorDrawables { useSupportLibrary = true }
 
@@ -167,6 +167,9 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // 本地模式配对二维码：生成（被控端）与扫码（控制端）
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-compose:1.9.3")
 

@@ -8,6 +8,11 @@
         M5 — 设备管理器、离线密码、保活
     -->
 
+    <!-- 被控端不申请相机：二维码由控制端扫描，这里把库带来的权限显式移除 -->
+    <uses-permission
+        android:name="android.permission.CAMERA"
+        tools:node="remove" />
+
     <!-- 读取各应用使用时长与历史 -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
