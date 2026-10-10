@@ -46,6 +46,10 @@ class LocalIdentity(context: Context) {
             }
         }
 
+    /** 设备公钥的未压缩点形式（0x04||X||Y，Base64）——配对时上送，跨 ROM 更稳 */
+    val devicePublicKeyRaw: String
+        get() = Base64.encodeToString(toRawPoint(publicKeyOf(devicePublicKey)), Base64.NO_WRAP)
+
     /** 设备 ID 前 8 位，配对码用（孩子可读） */
     val deviceCode: String
         get() = devicePublicKey.take(8)
@@ -76,9 +80,7 @@ class LocalIdentity(context: Context) {
 
     /** 由对端公钥派生主密钥 M（两侧算法相同 → 结果一致） */
     fun deriveMasterKey(peerPublicKeyBase64: String): ByteArray {
-        val peer = KeyFactory.getInstance("EC").generatePublic(
-            X509EncodedKeySpec(Base64.decode(peerPublicKeyBase64, Base64.NO_WRAP)),
-        )
+        val peer = parsePeerPublicKey(peerPublicKeyBase64)
         val agreement = KeyAgreement.getInstance("ECDH")
         agreement.init(privateKey())
         agreement.doPhase(peer, true)
@@ -109,14 +111,37 @@ class LocalIdentity(context: Context) {
         return token
     }
 
-    /** 校验并消费令牌；成功返回 true（单次有效） */
-    fun consumePairingToken(input: String): Boolean {
+    /**
+     * 校验令牌（**不消费**）。
+     *
+     * 消费与校验分离是必须的：配对流程在完成密钥协商之前失败（弱网/权限/编码问题）
+     * 时若已作废令牌，家长第二次尝试就会得到 no_token —— 真机上踩过。
+     */
+    fun checkPairingToken(input: String): Boolean {
         val token = prefs.getString(KEY_TOKEN, null) ?: return false
         val at = prefs.getLong(KEY_TOKEN_AT, 0L)
         val fresh = System.currentTimeMillis() - at < TOKEN_TTL_MS
-        if (!fresh || input.trim() != token) return false
+        return fresh && input.trim() == token
+    }
+
+    /** 配对成功后才作废令牌 */
+    fun invalidatePairingToken() {
         prefs.edit().remove(KEY_TOKEN).remove(KEY_TOKEN_AT).apply()
-        return true
+    }
+
+    /** 取当前有效令牌；没有或已过期就生成一个新的（被控端界面展示用） */
+    fun ensurePairingToken(): String {
+        val token = prefs.getString(KEY_TOKEN, null)
+        val at = prefs.getLong(KEY_TOKEN_AT, 0L)
+        val fresh = token != null && System.currentTimeMillis() - at < TOKEN_TTL_MS
+        return if (fresh) token!! else newPairingToken()
+    }
+
+    fun tokenRemainingSeconds(): Long {
+        val at = prefs.getLong(KEY_TOKEN_AT, 0L)
+        if (at == 0L) return 0
+        val left = TOKEN_TTL_MS - (System.currentTimeMillis() - at)
+        return if (left > 0) left / 1000 else 0
     }
 
     /** 记住已配对的家长端（多端白名单） */
@@ -140,7 +165,55 @@ class LocalIdentity(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_TOKEN_AT = "token_at"
         private const val KEY_PARENTS = "parents"
-        private const val TOKEN_TTL_MS = 60_000L
+        private const val TOKEN_TTL_MS = 10 * 60_000L
+
+        /** 未压缩点 → PublicKey（显式给定曲线参数，不经过证书/SPKI 解析路径） */
+        fun publicFromRawPoint(bytes: ByteArray): PublicKey {
+            val params = java.security.AlgorithmParameters.getInstance("EC").apply {
+                init(java.security.spec.ECGenParameterSpec("secp256r1"))
+            }
+            val spec = params.getParameterSpec(java.security.spec.ECParameterSpec::class.java)
+            val x = java.math.BigInteger(1, bytes.copyOfRange(1, 33))
+            val y = java.math.BigInteger(1, bytes.copyOfRange(33, 65))
+            return KeyFactory.getInstance("EC").generatePublic(
+                java.security.spec.ECPublicKeySpec(java.security.spec.ECPoint(x, y), spec),
+            )
+        }
+
+        /** PublicKey → 未压缩点（65 字节，左右各补齐 32 字节） */
+        fun toRawPoint(key: PublicKey): ByteArray {
+            val ec = key as java.security.interfaces.ECPublicKey
+            fun pad(v: java.math.BigInteger): ByteArray {
+                val b = v.toByteArray()
+                return when {
+                    b.size == 32 -> b
+                    b.size == 33 && b[0].toInt() == 0 -> b.copyOfRange(1, 33)
+                    b.size < 32 -> ByteArray(32 - b.size) + b
+                    else -> b.copyOfRange(b.size - 32, b.size)
+                }
+            }
+            return byteArrayOf(0x04) + pad(ec.w.affineX) + pad(ec.w.affineY)
+        }
+
+        /** 容忍两种编码：65 字节未压缩点（新）或 X.509 SPKI（旧/其它端） */
+        fun parsePeerPublicKey(base64: String): PublicKey {
+            val bytes = Base64.decode(base64.trim(), Base64.DEFAULT)
+            if (bytes.size == 65 && bytes[0].toInt() == 0x04) return publicFromRawPoint(bytes)
+            return runCatching {
+                KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(bytes))
+            }.getOrElse {
+                error(
+                    "对端公钥无法解析（长度 " + bytes.size + "，首字节 " +
+                        (bytes.firstOrNull()?.toInt() ?: -1) + "）",
+                )
+            }
+        }
+
+        private fun publicKeyOf(base64: String): PublicKey = runCatching {
+            KeyFactory.getInstance("EC").generatePublic(
+                X509EncodedKeySpec(Base64.decode(base64.trim(), Base64.DEFAULT)),
+            )
+        }.getOrElse { error("本地公钥无法解析") }
 
         /** HKDF-SHA256（简化版：extract 后再 expand 一次，32 字节输出足够本协议使用） */
         fun kdf(secret: ByteArray, info: String): ByteArray {

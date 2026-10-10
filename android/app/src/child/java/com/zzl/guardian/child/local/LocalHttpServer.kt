@@ -1,14 +1,9 @@
 package com.zzl.guardian.child.local
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
 import android.content.Context
-import android.content.Intent
+import android.app.Service
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import android.os.Build
 import android.util.Base64
 import android.util.Log
 import com.zzl.guardian.data.api.PolicyBundleDto
@@ -49,8 +44,8 @@ class LocalHttpServer(
     private var masterKey: ByteArray? = null
     private val usedNonces = HashSet<String>()
     private val random = SecureRandom()
-    private var pairingToken: String? = null
-    private var pairingTokenIssuedAt: Long = 0L
+    @Volatile
+    private var lastPairError: String? = null
 
     @Volatile
     private var running = false
@@ -61,14 +56,13 @@ class LocalHttpServer(
     fun start() {
         if (running) return
         running = true
-        pairingToken = String.format("%06d", random.nextInt(1000000))
-        pairingTokenIssuedAt = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
             runCatching {
                 serverSocket = ServerSocket(PORT)
                 acceptThread = Thread({ acceptLoop() }, "zzl-local").apply { isDaemon = true; start() }
                 registerNsd()
-                showPairingNotice()
+                // 不再默认弹配对通知：配对信息改由被控端界面的「本地连接」按钮展示
+                // （默认就挂一条连接信息容易被孩子察觉）
                 Log.i(TAG, "本地服务已启动，端口=$PORT")
             }.onFailure { Log.e(TAG, "本地服务启动失败", it); running = false }
         }
@@ -139,20 +133,24 @@ class LocalHttpServer(
     /* ---------------- 配对 ---------------- */
 
     private fun handlePair(body: String): Pair<String, String> {
-        val token = pairingToken
-            ?: return "403" to "{\"error\":\"no_token\"}"
         val obj = runCatching { json.decodeFromString(PairRequest.serializer(), body) }.getOrNull()
             ?: return "400" to "{\"error\":\"bad_json\"}"
-        val fresh = pairingTokenIssuedAt.let { System.currentTimeMillis() - it < TOKEN_TTL_MS }
-        if (!fresh || obj.token.trim() != token) return "403" to "{\"error\":\"bad_token\"}"
-        pairingToken = null // 单次有效
-
-        val master = identity.deriveMasterKey(obj.pub)
+        // 校验但**不消费**：协商失败时令牌仍可用，家长重试不会撞 no_token
+        if (!identity.checkPairingToken(obj.token)) {
+            return "403" to "{\"error\":\"bad_token\"}"
+        }
+        val master = runCatching { identity.deriveMasterKey(obj.pub) }.getOrElse { error ->
+            lastPairError = error.message
+            Log.w(TAG, "配对失败：对端公钥解析/协商异常", error)
+            return "400" to "{\"error\":\"bad_peer_key\",\"detail\":\"" +
+                (error.message ?: "unknown").replace("\"", "'") + "\"}"
+        }
         masterKey = master
         identity.rememberParent(obj.pub)
-        // 回执：用 M 对固定串签名，家长端校验后确认密钥一致
+        identity.invalidatePairingToken() // 成功才作废
         val proof = Base64.encodeToString(identity.sign(master, "zzl-pair-proof".toByteArray()), Base64.NO_WRAP)
-        return "200" to "{\"ok\":true,\"proof\":\"$proof\",\"childPub\":\"$identity.devicePublicKey\"}"
+        return "200" to "{\"ok\":true,\"proof\":\"$proof\",\"childPub\":\"" +
+            identity.devicePublicKeyRaw + "\"}"
     }
 
     private fun verifySignature(path: String, body: String): Boolean {
@@ -283,47 +281,10 @@ class LocalHttpServer(
         registrationListener = null
     }
 
-    /** 配对信息通过独立通知展示（被控端界面可能被图标隐藏挡住） */
-    private fun showPairingNotice() {
-        val nm = context.getSystemService(Service.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, "本地连接", NotificationManager.IMPORTANCE_LOW),
-            )
-        }
-        val ip = localIpv4() ?: "未获取到 IP"
-        val text = "设备码 ${identity.deviceCode} · 配对令牌 $pairingToken · 地址 $ip:$PORT"
-        val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(context, CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .setContentTitle("掌中灵本地连接")
-                .setContentText("在家长端输入以下信息完成配对")
-                .setStyle(Notification.BigTextStyle().bigText("在家长端「本地模式 → 添加设备」中输入：\n$text\n（令牌单次有效）"))
-                .setOngoing(true)
-                .build()
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(context)
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .setContentTitle("掌中灵本地连接：$text")
-                .setOngoing(true)
-                .build()
-        }
-        runCatching { nm.notify(NOTIFY_ID, notification) }
-    }
-
-    private fun localIpv4(): String? =
-        NetworkInterface.getNetworkInterfaces().asSequence()
-            .flatMap { it.inetAddresses.asSequence() }
-            .firstOrNull { it is InetAddress && !it.isLoopbackAddress && it.hostAddress?.contains(':') == false }
-            ?.hostAddress
 
     companion object {
         private const val TAG = "LocalServer"
         const val PORT = 9527
-        private const val CHANNEL = "zzl_local_pairing"
-        private const val NOTIFY_ID = 9527
-        private const val TOKEN_TTL_MS = 10 * 60_000L
     }
 
     /** 配对请求体 */

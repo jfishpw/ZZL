@@ -151,8 +151,26 @@ class LocalTransport(
                 val proof = obj["proof"]?.jsonPrimitive?.content ?: error("缺少回执签名")
 
                 // 与被控端同口径派生主密钥：ECDH(parentPriv, childPub) → KDF
-                val peer = KeyFactory.getInstance("EC")
-                    .generatePublic(X509EncodedKeySpec(Base64.decode(childPub, Base64.NO_WRAP)))
+                // 被控端上送的是 65 字节未压缩点；同时兼容旧版 X.509 SPKI
+                val raw = Base64.decode(childPub.trim(), Base64.DEFAULT)
+                val peer = if (raw.size == 65 && raw[0].toInt() == 0x04) {
+                    val params = java.security.AlgorithmParameters.getInstance("EC").apply {
+                        init(java.security.spec.ECGenParameterSpec("secp256r1"))
+                    }
+                    val spec = params.getParameterSpec(java.security.spec.ECParameterSpec::class.java)
+                    KeyFactory.getInstance("EC").generatePublic(
+                        java.security.spec.ECPublicKeySpec(
+                            java.security.spec.ECPoint(
+                                java.math.BigInteger(1, raw.copyOfRange(1, 33)),
+                                java.math.BigInteger(1, raw.copyOfRange(33, 65)),
+                            ),
+                            spec,
+                        ),
+                    )
+                } else {
+                    KeyFactory.getInstance("EC")
+                        .generatePublic(X509EncodedKeySpec(raw))
+                }
                 val agreement = KeyAgreement.getInstance("ECDH")
                 agreement.init(store.parentPrivateKey())
                 agreement.doPhase(peer, true)

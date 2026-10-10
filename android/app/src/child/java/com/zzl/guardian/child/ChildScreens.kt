@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zzl.guardian.child.gate.ChildGateViewModel
 import com.zzl.guardian.child.gate.PinGateScreen
 import com.zzl.guardian.child.keepalive.KeepaliveManager
+import com.zzl.guardian.child.local.LocalPairingDialog
 import com.zzl.guardian.ui.serversettings.ServerSettingsDialog
 
 @Composable
@@ -124,6 +125,11 @@ fun ChildHome(viewModel: ChildViewModel = hiltViewModel()) {
         }
     }
 
+    var showLocalPairing by remember { mutableStateOf(false) }
+    if (showLocalPairing) {
+        LocalPairingDialog(onDismiss = { showLocalPairing = false })
+    }
+
     if (showServerSettings) {
         ServerSettingsDialog(
             onDismiss = {
@@ -141,6 +147,7 @@ fun ChildHome(viewModel: ChildViewModel = hiltViewModel()) {
             ChildTopBar(
                 state = state,
                 onServerSettings = { showServerSettings = true },
+                onLocalPairing = { showLocalPairing = true },
                 onRefresh = { viewModel.refreshUsage(); viewModel.refreshHealth() },
                 onUnpair = { viewModel.unpair() },
             )
@@ -182,6 +189,7 @@ fun ChildHome(viewModel: ChildViewModel = hiltViewModel()) {
 private fun ChildTopBar(
     state: ChildViewModel.UiState,
     onServerSettings: () -> Unit,
+    onLocalPairing: () -> Unit,
     onRefresh: () -> Unit,
     onUnpair: () -> Unit,
 ) {
@@ -200,6 +208,7 @@ private fun ChildTopBar(
             }
         },
         actions = {
+            TextButton(onClick = onLocalPairing) { Text("本地连接") }
             IconButton(onClick = onServerSettings) {
                 Icon(Icons.Filled.Dns, contentDescription = "服务器设置")
             }

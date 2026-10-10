@@ -87,6 +87,8 @@ class CommandRunner @Inject constructor(
 
             "clear_lock" -> {
                 deviceStateRepository.setLocked(deviceId, false)
+                // 本地模式的锁定开关一并解除 —— 否则家长在服务器端解锁后设备仍被本地锁压住
+                engine.localLocked = false
                 true to "unlocked"
             }
 
