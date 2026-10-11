@@ -144,6 +144,8 @@ class GuardForegroundService : Service() {
         super.onCreate()
         graph = guardGraph(this)
         engine = graph.guardEngine()
+        // 系统预装应用判定器（1.0.19）：内置应用宝等系统组件不计入使用时长
+        engine.systemAppFilter = com.zzl.guardian.child.engine.SystemAppFilter(this)
         commandRunner = graph.commandRunner()
         store = graph.settingsStore()
         api = graph.apiService()

@@ -556,7 +556,7 @@ class GuardEngine @Inject constructor(
                 _state.value = _state.value.copy(timeRequestStatus = null)
             }
             // 桌面不计时：不给桌面开计时会话，但拦截判定照常（额度耗尽时桌面也被遮罩压住）
-            if (openPackage != pkg && !isDesktopPackage(pkg)) startSession(pkg, at, appUsedRaw)
+            if (openPackage != pkg && !isSystemOrDesktop(pkg)) startSession(pkg, at, appUsedRaw)
             return
         }
 
@@ -982,7 +982,7 @@ class GuardEngine @Inject constructor(
         }
         val visible = visiblePackagesLookup?.invoke() ?: return
         val focused = desiredPackage
-        val targets = visible.filter { it != focused && !isDesktopPackage(it) }
+        val targets = visible.filter { it != focused && !isSystemOrDesktop(it) }
 
         for (pkg in targets) {
             if (pkg !in parallelOpen) parallelOpen[pkg] = at
@@ -1014,6 +1014,23 @@ class GuardEngine @Inject constructor(
         )
         parallelRecorded = true
     }
+
+    /**
+     * 系统预装/系统组件判定器（1.0.19）。
+     *
+     * 由服务注入 —— 引擎不该自己拿 Context 查 PackageManager，
+     * 判定的失败策略（拿不到就照常计时）由过滤器自己兜底。
+     */
+    var systemAppFilter: SystemAppFilter? = null
+
+    /**
+     * 是否是「不计时」的系统组件：桌面 或 系统预装应用。
+     *
+     * 内置应用宝（com.tbsmart.levision）这类预装应用曾占据大部分使用时间，
+     * 它们不可卸载、孩子也不会主动用，计入只会干扰家长判断。
+     */
+    private fun isSystemOrDesktop(pkg: String): Boolean =
+        isDesktopPackage(pkg) || systemAppFilter?.isSystemComponent(pkg) == true
 
     /** 桌面不参与并行计时：小窗上课 + 桌面背景时，桌面不应被计为"在使用" */
     private fun isDesktopPackage(pkg: String): Boolean =
