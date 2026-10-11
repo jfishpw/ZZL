@@ -12,6 +12,7 @@ import com.zzl.guardian.child.data.PolicyRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -35,6 +36,7 @@ class LocalHttpServer(
     private val context: Context,
     private val identity: LocalIdentity,
     private val policyRepository: PolicyRepository,
+    private val usageRepository: com.zzl.guardian.child.data.UsageRepository,
     private val engine: GuardEngine,
     private val json: Json,
     private val scope: CoroutineScope,
@@ -82,7 +84,7 @@ class LocalHttpServer(
         }
     }
 
-    private fun handle(socket: java.net.Socket) {
+    private suspend fun handle(socket: java.net.Socket) {
         runCatching {
             socket.soTimeout = 8000
             val reader = BufferedReader(InputStreamReader(socket.inputStream, Charsets.UTF_8))
@@ -116,7 +118,7 @@ class LocalHttpServer(
         runCatching { socket.close() }
     }
 
-    private fun route(method: String, path: String, body: String): Pair<String, String> {
+    private suspend fun route(method: String, path: String, body: String): Pair<String, String> {
         return when {
             path == "/local/v1/pair" && method == "POST" -> handlePair(body)
             path == "/local/v1/ping" && (method == "GET" || method == "POST") -> "200" to "{\"ok\":true,\"paired\":${identity.hasPairedParent()}}"
@@ -125,6 +127,7 @@ class LocalHttpServer(
             path == "/local/v1/state" && (method == "GET" || method == "POST") -> handleState()
             path == "/local/v1/policy" && (method == "GET" || method == "POST") -> handleGetPolicy()
             path == "/local/v1/policy" && method == "PUT" -> handlePutPolicy(body)
+            path == "/local/v1/usage/report" && (method == "GET" || method == "POST") -> handleUsageReport()
             path == "/local/v1/command" && method == "POST" -> handleCommand(body)
             else -> "404" to "{\"error\":\"not_found\"}"
         }
@@ -151,6 +154,35 @@ class LocalHttpServer(
         val proof = Base64.encodeToString(identity.sign(master, "zzl-pair-proof".toByteArray()), Base64.NO_WRAP)
         return "200" to "{\"ok\":true,\"proof\":\"$proof\",\"childPub\":\"" +
             identity.devicePublicKeyRaw + "\"}"
+    }
+
+    /** 当日 dayKey（一期按自然日，resetHour 非 0 时待二期对齐） */
+    private fun todayDayKey(): String =
+        java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+
+    private fun esc(v: String): String = v.replace("\\", "\\\\").replace("\"", "\\\"")
+
+    /** 使用报告：今日逐应用用量 + 时间线 + 拦截记录（家长端一次拉齐） */
+    private suspend fun handleUsageReport(): Pair<String, String> {
+        val dayKey = todayDayKey()
+        val perApp = usageRepository.rawPerAppMs(dayKey)
+            .entries.sortedByDescending { it.value }
+            .joinToString(",") { "{\"pkg\":\"" + esc(it.key) + "\",\"ms\":" + it.value + "}" }
+        val now = System.currentTimeMillis()
+        val sessions = usageRepository.sessionsForDay(dayKey)
+            .sortedByDescending { it.startTs }.take(40)
+            .joinToString(",") {
+                "{\"pkg\":\"" + esc(it.packageName) + "\",\"start\":" + it.startTs + "," +
+                    "\"end\":" + (it.endTs ?: now) + ",\"ms\":" + it.durationMs + "," +
+                    "\"open\":" + (it.endTs == null) + "}"
+            }
+        val blocks = usageRepository.observeRecentBlocks(30).first()
+            .joinToString(",") {
+                "{\"pkg\":\"" + esc(it.packageName) + "\",\"reason\":\"" + it.reason + "\",\"ts\":" + it.ts + "}"
+            }
+        val payload = "{\"dayKey\":\"" + dayKey + "\",\"perApp\":[" + perApp + "]," +
+            "\"sessions\":[" + sessions + "],\"blocks\":[" + blocks + "]}"
+        return "200" to payload
     }
 
     private fun verifySignature(path: String, body: String): Boolean {

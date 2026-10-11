@@ -55,6 +55,45 @@ fun LocalModeScreen(onDismiss: () -> Unit) {
     var resetHour by remember { mutableStateOf("") }
     var policyEnabled by remember { mutableStateOf(true) }
 
+    // 使用报告（连接后先拉一次，之后每 30 秒随轮询刷新）
+    var reportPerApp by remember { mutableStateOf<List<Pair<String, Long>>>(emptyList()) }
+    var reportSessions by remember { mutableStateOf<List<SessionRow>>(emptyList()) }
+    var reportBlocks by remember { mutableStateOf<List<BlockRow>>(emptyList()) }
+
+    fun fmtDur(ms: Long): String {
+        val m = ms / 60_000
+        return if (m >= 60) "" + (m / 60) + "小时" + (m % 60) + "分" else "" + m + "分钟"
+    }
+    fun fmtTime(ts: Long): String =
+        java.text.SimpleDateFormat("HH:mm", java.util.Locale.CHINA).format(java.util.Date(ts))
+
+    suspend fun refreshReport() {
+        val obj = kotlinx.serialization.json.Json
+            .parseToJsonElement(transport.request("/local/v1/usage/report")).jsonObject
+        reportPerApp = (obj["perApp"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { el ->
+            val o = el.jsonObject
+            val pkg = o["pkg"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            Pair(pkg, o["ms"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L)
+        } ?: emptyList()
+        reportSessions = (obj["sessions"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { el ->
+            val o = el.jsonObject
+            SessionRow(
+                o["pkg"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                o["start"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                o["ms"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                o["open"]?.jsonPrimitive?.content == "true",
+            )
+        } ?: emptyList()
+        reportBlocks = (obj["blocks"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { el ->
+            val o = el.jsonObject
+            BlockRow(
+                o["pkg"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                o["reason"]?.jsonPrimitive?.content ?: "",
+                o["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+            )
+        } ?: emptyList()
+    }
+
     // 扫码配对：扫到被控端二维码后自动填表，家长确认后点「配对」
     val scanOptions = {
         ScanOptions().apply {
@@ -105,12 +144,18 @@ fun LocalModeScreen(onDismiss: () -> Unit) {
         policyEnabled = bundle.enabled
     }
 
-    // 连接后轮询实时状态（5 秒）
+    // 连接后轮询实时状态（5 秒）；使用报告每 6 轮（30 秒）刷新
     LaunchedEffect(paired) {
         if (!paired) return@LaunchedEffect
+        var round = 0
         while (true) {
             runCatching { refreshState() }
+                .onSuccess {
+                    connected = true
+                    if (round % 6 == 0) runCatching { refreshReport() }
+                }
                 .onFailure { connected = false; message = "连接失败：${it.message}" }
+            round += 1
             delay(5000)
         }
     }
@@ -250,6 +295,102 @@ fun LocalModeScreen(onDismiss: () -> Unit) {
 
                 ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp)) {
+                        Text("使用报告（今日）", style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(6.dp))
+                        if (reportPerApp.isEmpty()) {
+                            Text("暂无数据", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            reportPerApp.take(5).forEach { (pkg, ms) ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(pkg.substringAfterLast('.'), fontSize = 13.sp)
+                                    Text(fmtDur(ms), fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        if (reportSessions.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("时间线（最近）", fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                            reportSessions.take(8).forEach { s ->
+                                Text(
+                                    fmtTime(s.start) + "  " + s.pkg.substringAfterLast('.') +
+                                        "  " + fmtDur(s.ms) + if (s.open) "（进行中）" else "",
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                        if (reportBlocks.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("拦截记录（最近）", fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                            reportBlocks.take(5).forEach { b ->
+                                Text(
+                                    fmtTime(b.ts) + "  " + b.pkg.substringAfterLast('.') +
+                                        "  [" + b.reason + "]",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("使用报告（今日）", style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(6.dp))
+                        if (reportPerApp.isEmpty()) {
+                            Text("暂无数据", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            reportPerApp.take(5).forEach { (pkg, ms) ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(pkg.substringAfterLast('.'), fontSize = 13.sp)
+                                    Text(fmtDur(ms), fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        if (reportSessions.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "时间线（最近）",
+                                fontSize = 13.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            )
+                            reportSessions.take(8).forEach { s ->
+                                Text(
+                                    fmtTime(s.start) + "  " + s.pkg.substringAfterLast('.') +
+                                        "  " + fmtDur(s.ms) + if (s.open) "（进行中）" else "",
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                        if (reportBlocks.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "拦截记录（最近）",
+                                fontSize = 13.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            )
+                            reportBlocks.take(5).forEach { b ->
+                                Text(
+                                    fmtTime(b.ts) + "  " + b.pkg.substringAfterLast('.') +
+                                        "  [" + b.reason + "]",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp)) {
                         Text("每日总时长（分钟）", style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -319,3 +460,7 @@ fun LocalModeScreen(onDismiss: () -> Unit) {
         }
     }
 }
+
+
+private data class SessionRow(val pkg: String, val start: Long, val ms: Long, val open: Boolean)
+private data class BlockRow(val pkg: String, val reason: String, val ts: Long)

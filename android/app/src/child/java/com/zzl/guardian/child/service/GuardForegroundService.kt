@@ -172,6 +172,7 @@ class GuardForegroundService : Service() {
             context = this@GuardForegroundService,
             identity = localIdentity,
             policyRepository = policyRepository,
+            usageRepository = usageRepository,
             engine = engine,
             json = json,
             scope = scope,
