@@ -34,3 +34,4 @@ android/app/_old_build/
 # 工作区数据与缓存
 .workbuddy/
 .cache/
+.buildlog/

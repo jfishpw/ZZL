@@ -19,6 +19,7 @@ import com.zzl.guardian.MainActivity
 import com.zzl.guardian.R
 import com.zzl.guardian.child.PermissionChecker
 import com.zzl.guardian.child.admin.AdminModeManager
+import com.zzl.guardian.child.admin.AccessibilityRestorer
 import com.zzl.guardian.child.data.AuditAction
 import com.zzl.guardian.child.data.AuditLevel
 import com.zzl.guardian.child.data.DeviceStateRepository
@@ -482,14 +483,44 @@ class GuardForegroundService : Service() {
         val names = lost.joinToString("、") { PermissionChecker.describe(it) }
         Log.w(TAG, "★ 检测到权限被关闭：$names")
 
+        // 无障碍是管控的命门：ROM 的「安全清理/权限回收」会把它静默关掉。
+        // 有 WRITE_SECURE_SETTINGS 时直接写回（DNS 防护同款权限，无需 root / Device Owner）。
+        var restoreNote = ""
+        if ("accessibility" in lost) {
+            when (val result = runCatching { AccessibilityRestorer.restore(this) }.getOrNull()) {
+                AccessibilityRestorer.Result.RESTORED -> {
+                    restoreNote = "已自动重新开启"
+                    Log.w(TAG, "无障碍已被自动恢复")
+                    // 立即复核一次，让状态机不再把它当作"缺失"
+                    lastHealth = PermissionChecker.snapshot(this)
+                }
+                AccessibilityRestorer.Result.PENDING -> {
+                    restoreNote = "已写回设置，等待系统重新绑定（约 3 秒）"
+                    Log.i(TAG, "无障碍设置已写回，等待系统绑定")
+                }
+                AccessibilityRestorer.Result.NO_PERMISSION -> {
+                    restoreNote = "无法自动恢复：缺少 WRITE_SECURE_SETTINGS，请用电脑端工具执行一次授权"
+                    Log.w(TAG, "无障碍自愈失败：缺 WRITE_SECURE_SETTINGS")
+                }
+                AccessibilityRestorer.Result.DISABLED -> {
+                    restoreNote = "家长已退出管控，不再自动恢复"
+                }
+                else -> {
+                    restoreNote = "自动恢复失败（系统拒绝写入），请手动重新开启"
+                    Log.w(TAG, "无障碍自愈失败：系统拒绝写入")
+                }
+            }
+        }
+
         runCatching {
             usageRepository.recordAudit(
                 action = AuditAction.PERMISSION_LOST,
                 detail = buildJsonObject {
                     put("missing", buildJsonArray { lost.forEach { add(JsonPrimitive(it)) } })
                     put("names", names)
+                    if (restoreNote.isNotBlank()) put("restore", restoreNote)
                 }.toString(),
-                level = AuditLevel.WARN,
+                level = if (restoreNote.startsWith("已自动重新开启")) AuditLevel.INFO else AuditLevel.WARN,
             )
         }.onFailure { Log.w(TAG, "记录权限丢失事件失败", it) }
     }
@@ -940,6 +971,8 @@ class GuardForegroundService : Service() {
      * 清掉配对之后，所有自启路径自然失效，最后停服务只是收尾。
      */
     private suspend fun exitGuardCompletely() {
+        // 退出管控即关闭无障碍自愈 —— 否则家长想关管控时会被反复打开
+        runCatching { AccessibilityRestorer.setEnabled(this, false) }
         Log.w(TAG, "家长通过离线密码退出管控")
 
         // 清掉配对会话：这是"不再受管控"的根本标志。
